@@ -1,13 +1,12 @@
-# predictive-rover-suspension
-Final year project. Using TOF and IMU sensors to assess terrain and pose to control BLDC motors using FOC controllers and CAN communication for suspension and body control.
 
+# Predictive Rover Suspension
+Final year project. Using TOF and IMU sensors to assess terrain and body pose to control BLDC motors using FOC controllers and CAN communication for suspension and body control.
 ## Python Versions
 Don't assume the newest version is the most appropriate.
 On Jetson Orin Nano the Python version is 3.10.12 (!!! **Do NOT upgrade** !!!)
 <br>
 [Notes for ROS2 Humble on Ubuntu 22.04](https://ros2-tutorial.readthedocs.io/en/humble/preamble/python/installing_python.html?)
 <br>
-Note: The normal CanJam instructons don't use ROS2.
 
 ## Generic Instructions for Python Project with VS Code and GitHub
 <details>
@@ -102,7 +101,7 @@ Search for '*Remote Repositories: Open Remote Repository*'
 Then, choose '*Open Repository from GitHub*'  
 ![](docs/images/readme260123002.png)
 
-Within the remote repo click on the lower GitHub symbol ![](docs/images/readme260123003.png).
+Within the remote repo click on the lower-left GitHub symbol (VS Code UI) ![](docs/images/readme260123003.png).
 
 Then select '*Continue working in New Local Clone*'  
 ![](docs/images/readme260123004.png)
@@ -508,3 +507,8 @@ python3-spidev/jammy,now 3.5-3build1 arm64 [installed,automatic]
 
 <br>
 <br>
+
+
+
+
+

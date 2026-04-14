@@ -1,0 +1,33 @@
+import board
+import digitalio
+import time
+# import adafruit_bme280
+from adafruit_extended_bus import ExtendedSPI as SPI
+
+# Create library object using our Extended Bus I2C port
+cs = digitalio.DigitalInOut(board.D5)
+spi = SPI(0, 0)  # Device is /dev/spidev0.0
+
+# bme280 = adafruit_bme280.Adafruit_BME280_SPI(spi, cs)
+
+# print(f"\nTemperature: {bme280.temperature:0.1f} C")
+
+# https://forums.adafruit.com/viewtopic.php?t=127181
+spi.msh=10000
+spi.bpw=8
+spi.threewire = False
+spi.lsbfirst = False
+spi.mode = 1
+spi.cshigh = False
+# spi.open(0,0)
+# spi.open(0,cs)
+
+try:
+    while True:
+        angle=spi.readbytes(8)
+        print(angle)
+        time.sleep(0.2)
+    #end while
+except KeyboardInterrupt:
+    spi.close()
+#end try
