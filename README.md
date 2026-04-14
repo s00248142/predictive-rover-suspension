@@ -1,6 +1,6 @@
 
 # Predictive Rover Suspension
-Final year project. Using TOF and IMU sensors to assess terrain and body pose to control BLDC motors using FOC controllers and CAN communication for suspension and body control.
+Final year project. Using TOF and IMU sensors to assess terrain and body pose respectively, to control BLDC motors using FOC controllers and CAN communication for suspension and body control.
 ## Python Versions
 Don't assume the newest version is the most appropriate.
 On Jetson Orin Nano the Python version is 3.10.12 (!!! **Do NOT upgrade** !!!)
@@ -10,7 +10,7 @@ On Jetson Orin Nano the Python version is 3.10.12 (!!! **Do NOT upgrade** !!!)
 
 ## Generic Instructions for Python Project with VS Code and GitHub
 <details>
-<summary>If the target machine is generic Linux, ensure PIP and Venv are installed first (Click to expand).</summary>
+<summary>If the destination of the final target machine is generic Linux, ensure PIP and Venv are installed there first. <br>Click to expand.</summary>
 
 ```bash
 python3 --version
@@ -223,6 +223,9 @@ Install the captured dependencies on the new machine:
 pip install -r requirements.txt
 ```
 ### Create `.vscode/extensions.json` file for recommending VS Code Extensions for this project.
+```bash
+code .vscode/extensions.json
+```
 You can get IDs of installed extensions using:
 ```bash
 code --list-extensions

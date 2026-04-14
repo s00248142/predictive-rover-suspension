@@ -1,0 +1,9 @@
+{
+  // Activate .venv/ when terminal is started
+  "python.terminal.activateEnvironment": true,
+
+  // Work with Bash as the default terminal
+  "terminal.integrated.defaultProfile.windows": "Git Bash",
+  "terminal.integrated.defaultProfile.linux": "bash",
+  "terminal.integrated.defaultProfile.osx": "bash"
+}
