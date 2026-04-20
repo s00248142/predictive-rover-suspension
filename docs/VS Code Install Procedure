@@ -1,0 +1,36 @@
+https://code.visualstudio.com/
+
+Download the .deb file (for ARM)
+
+cd ~/Downloads/
+ls
+
+sudo dpkg -i code..... (press tab)
+
+The installer will prompt to add repo to to apt. Definitely select yes.
+
+code
+
+Sign in with GitHub
+
+Install Remote Repositories
+Install Remote - SSH
+
+
+
+
+Flash Seeed BSP:
+https://wiki.seeedstudio.com/flash/jetpack_to_selected_product/
+
+https://wiki.seeedstudio.com/recomputer_mini_j401_getting_started/
+
+Seems to be called the reComputer Mini J3011 as the full version with case.
+https://www.seeedstudio.com/reComputer-Mini-J3011-p-6356.html
+
+The interface usage of the J401-Mini Carrier Board is the same as that of the reComputer J30/40 Mini. Please refer to this wiki for detailed interface usage examples:
+https://wiki.seeedstudio.com/recomputer_jetson_mini_hardware_interfaces_usage/
+
+
+Test NVME speed:
+sudo dd if=/dev/zero of=tempfile bs=1M count=1024 conv=fdatasync
+Please run 'sudo rm tempfile' command to delete the cache files after the test is complete.
