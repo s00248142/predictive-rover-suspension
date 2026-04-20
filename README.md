@@ -10,7 +10,7 @@ On Jetson Orin Nano the Python version is 3.10.12 (!!! **Do NOT upgrade** !!!)
 
 ## Generic Instructions for Python Project with VS Code and GitHub
 <details>
-<summary>If the destination of the final target machine is generic Linux, ensure PIP and Venv are installed there first. <br>Click to expand.</summary>
+<summary>If the destination of the target machine is generic Linux, ensure PIP and Venv are installed there first. <br>Click to expand.</summary>
 
 ```bash
 python3 --version
@@ -151,7 +151,10 @@ or BASH:
 ```bash
 source .venv/Scripts/activate
 ```
-
+or Linux:
+```bash
+source .venv/bin/activate
+```
 
 If you need to deactivate (optional):
 ```bash
