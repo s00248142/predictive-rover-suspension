@@ -17,7 +17,7 @@ spi.open(0,0)  → /dev/spidev0.1 (CE0)
 ## 2. SPI device configuration
 [Example device manual, 'AMS AS5048A'](https://ozrobotics.com/wp-content/uploads/2024/05/AS5048A-and-AS5048BEncoder-Datasheet-for-CubeMars-GL35-KV100-BLDC-Gimbal-Motor.pdf)<br>
 
-![](docs/images/readme_spi_260205001.png)
+![](../docs/images/readme_spi_260205001.png)
 
 ### CPOL
 The CS is 'active low'. See the timing diagram in the the example linked above (4.2.2 SPI Timing). When CSn goes low (CE0 on RPi).
