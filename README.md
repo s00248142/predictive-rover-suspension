@@ -16,10 +16,10 @@ On Jetson Orin Nano the Python version is 3.10.12 (!!! **Do NOT upgrade** !!!)
 python3 --version
 ```
 ```bash
-python3-pip --version
+python3 -m pip --version
 ```
 ```bash
-python3-venv --version
+python3 -m venv --help
 ```
 If they need to be installed:
 ```bash

@@ -16,10 +16,10 @@ import adafruit_vl53l4cd
 
 i2c = board.I2C()  # uses board.SCL and board.SDA
 # i2c = board.STEMMA_I2C()  # For using the built-in STEMMA QT connector on a microcontroller
-PIN = board.D18
+# PIN = board.D18
 vl53 = adafruit_vl53l4cd.VL53L4CD(i2c)
-led = digitalio.DigitalInOut(PIN)
-led.direction = digitalio.Direction.OUTPUT
+# led = digitalio.DigitalInOut(PIN)
+# led.direction = digitalio.Direction.OUTPUT
 
 # OPTIONAL: can set non-default values
 vl53.inter_measurement = 0
@@ -40,9 +40,9 @@ while True:
     while not vl53.data_ready:
         pass
     vl53.clear_interrupt()
-    # print(f"Distance: {vl53.distance} cm")
-    if vl53.distance < 15 and vl53.distance > 0.1:
-        led.value = True
-    else:
-        led.value = False
+    print(f"Distance: {vl53.distance} cm")
+    # if vl53.distance < 15 and vl53.distance > 0.1:
+    #     led.value = True
+    # else:
+    #     led.value = False
 
