@@ -346,6 +346,17 @@ Use `libgpiod` as a C library to interface with `/dev/gpiochip*`:
 (Usually already installed in distro)<br>
 ![](docs/images/readme260129001.png)
 
+To use libgpiod in Python install from apt:
+```bash
+sudo apt install python3-libgpiod
+```
+...and install in PIP:
+```bash
+pip3 install gpiod
+```
+<br>
+ 
+
 The `gpiozero` Python wrapper can use `libgpiod` underneath (On Raspberry Pi OS by default).
 ![](docs/images/readme260129002.png)
 
