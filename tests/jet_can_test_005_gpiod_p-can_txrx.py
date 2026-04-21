@@ -28,7 +28,8 @@ try:
 
 
     run_cmd(["sudo", "ip", "link", "set", "can0", "down"])
-    run_cmd(["sudo", "ip", "link", "set", "can0", "type", "can", "bitrate", "1000000"])
+    run_cmd(["sudo", "ip", "link", "set", "can0", "type", 
+             "can", "bitrate", "1000000"])
     run_cmd(["sudo", "ip", "link", "set", "can0", "up"])
 
     print("can0 set to 1Mbps.")
@@ -53,17 +54,17 @@ try:
     count = 0
     
     while True:
-        # msg = can.Message(
-        #     arbitration_id=0x123,
-        #     data=[count,0,0,0,0,0,0,0],
-        #     is_extended_id=False
-        # )
+        msg = can.Message(
+            arbitration_id=0x123,
+            data=[count,0,0,0,0,0,0,0],
+            is_extended_id=False
+        )
 
-        # bus0.send(msg)
+        bus0.send(msg)
 
-        # count = (count + 1) % 256
+        count = (count + 1) % 256
 
-        # time.sleep(1)
+        time.sleep(1)
 
         rx_msg = bus0.recv(timeout=1)
         if rx_msg is not None:
