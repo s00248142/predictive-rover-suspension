@@ -57,42 +57,53 @@ can0.start()
 # Square to go to lean mode
 # X to go back to dance mode
 
+# Crawling demo
+# aiming demo
+# flip demo
+# upside-down demo
+
+# Safe shutdown
+# SSH mode
+# Enable desktop
+# Disable desktop
+
 # Main section:
 
 # Disable motor
 can0.bus.send(can.Message(
-        arbitration_id=0x003,
+        arbitration_id=0x001,
         data=[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfd],
         is_extended_id=False
     ))
 time.sleep(1)
 # Set zero
 can0.bus.send(can.Message(
-        arbitration_id=0x003,
+        arbitration_id=0x001,
         data=[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe],
         is_extended_id=False
     ))
 time.sleep(1)
 # Enable motor
 can0.bus.send(can.Message(
-        arbitration_id=0x003,
+        arbitration_id=0x001,
         data=[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc],
         is_extended_id=False
     ))
 time.sleep(1)
 
-count = 0xff
+count = 0x7f
 
 while True:
     msg = can.Message(
-        arbitration_id=0x123,
-        data=[0x7f, count, 0x7f, 0xf0, 0x00, 0x00, 0x17, 0xff],
+        arbitration_id=0x001,
+        # data=[count, 0xff, 0x7f, 0xf0, 0x01, 0x00, 0x17, 0xff],
+        data=[count, 0xff, 0x7f, 0xf0, 0x10, 0x01, 0x17, 0xff],
         is_extended_id=False
     )
 
     can0.bus.send(msg)
 
-    count = (count + 10) % 256
+    count = (count + 0x01) % 256
 
     
 
@@ -111,10 +122,14 @@ while True:
     if cmd == "q":
         break
 
+can0.bus.send(can.Message(
+        arbitration_id=0x001,
+        data=[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfd],
+        is_extended_id=False
+    ))
 can0.stop()
 if gpio_request is not None:
     gpio_request.release() # Release ownership of line 43.
-
 
 
 # Eventually use this with PS3 controller:
