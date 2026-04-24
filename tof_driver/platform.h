@@ -11,9 +11,6 @@
   */
 
 
-/* Modification of code: */
-/* Programmer: Alan Ryan */
-
 #ifndef _PLATFORM_H_
 #define _PLATFORM_H_
 #pragma once
