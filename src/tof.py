@@ -68,10 +68,13 @@ class TofSensor:
         self.default_addr = 0x29
         self.addr = 0x00
         self.expected_sensor_id = 0xebaa
+        self.timing_budget_ms = 20
+        self.intermeasurement_ms = 0
+        self.ready = c.c_uint8(0) # Initialise ready.value as 0
         self.xshut_on()
         self.change_addr()
         self.results = ResultsData()
-        self.start()
+        self.init()
 
     def xshut_on(self):
         print(f"Attempting xshut turn on for sensor {self.tof_idx}")
@@ -113,7 +116,10 @@ class TofSensor:
             status = lib.VL53L4CD_GetSensorId(old_addr, c.byref(sensor_id))
 
             if status != 0:
-                raise RuntimeError(f"GetSensorId failed at 0x29 for xshut{self.tof_idx}: {status}")
+                raise RuntimeError(
+                    f"GetSensorId failed at 0x29 for xshut{self.tof_idx}:",
+                    f"{status}"
+                    )
             
             if sensor_id.value == self.expected_sensor_id:
                 break
@@ -136,81 +142,60 @@ class TofSensor:
         print("New I2C address:", hex(new_linux_addr))
         print(f"sensor_id: 0x{sensor_id.value:04x}")
 
-    def start(self):
-        # Assign variables
-        device = self.addr # Device I2C address (wrapped as c_uint16)
-        ready = c.c_uint8(0) # Initialise ready.value as 0
-        results = ResultsData() # Empty struct
-
+    def init(self):
         # Initialise sensor
-        status = lib.VL53L4CD_SensorInit(device)
+        status = lib.VL53L4CD_SensorInit(self.addr)
         print("SensorInit:", status)
 
         # Set sensor timing (device, timing_budget_ms, inter_measurement_ms )
-        timing_budget_ms = 20
-        status = lib.VL53L4CD_SetRangeTiming(device, timing_budget_ms, 0) 
+        status = lib.VL53L4CD_SetRangeTiming(self.addr,
+                                               self.timing_budget_ms,
+                                               self.intermeasurement_ms) 
         print("SetRangeTiming:", status)
 
         # Start ranging on the sensor
-        status = lib.VL53L4CD_StartRanging(device)
+        status = lib.VL53L4CD_StartRanging(self.addr)
         print("StartRanging:", status)
 
-        ################# Continuous measurement polling loop ##################
+        
+    def poll_once(self):
 
-        count = 0
-        t0 = time.perf_counter() # Used to calculate frequency of loop. 
+        self.ready.value = 0
 
-        while True:
-            ready.value = 0
-
-            # Check for data_ready interrupt flag.
-            # Note: byref(ready) is equivalent to &ready in C. Gets address.
-            while ready.value != 1:
-                status = lib.VL53L4CD_CheckForDataReady(device,c.byref(ready))
-                if status != 0:
-                    raise RuntimeError(f"CheckForDataReady failed: {status}")
-                time.sleep(0.002)
-
-            # Get results data from sensor
-            status = lib.VL53L4CD_GetResult(device, c.byref(results))
+        # Check for data_ready interrupt flag.
+        # Note: byref(ready) is equivalent to &ready in C. Gets address.
+        while self.ready.value != 1:
+            status = lib.VL53L4CD_CheckForDataReady(self.addr,
+                                                    c.byref(self.ready))
             if status != 0:
-                raise RuntimeError(f"GetResult failed: {status}")
+                raise RuntimeError(f"CheckForDataReady failed: {status}")
+            time.sleep(0.002)
 
-            # Clear interrupt flag
-            status = lib.VL53L4CD_ClearInterrupt(device)
-            if status != 0:
-                raise RuntimeError(f"ClearInterrupt failed: {status}")
-            
-            # Print results
-            # print(f"distance = {results.distance_mm} mm, "
-            #         f"sigma = {results.sigma_mm} mm")
+        # Get results data from sensor
+        status = lib.VL53L4CD_GetResult(self.addr, c.byref(self.results))
+        if status != 0:
+            raise RuntimeError(f"GetResult failed: {status}")
 
-            # Store results
-            latest_distance = results.distance_mm
-            latest_sigma = results.sigma_mm
-            latest_status = results.range_status
-            
-            # Calculate loop rate in Hz
-            count += 1
-            now = time.perf_counter()
+        # Clear interrupt flag
+        status = lib.VL53L4CD_ClearInterrupt(self.addr)
+        if status != 0:
+            raise RuntimeError(f"ClearInterrupt failed: {status}")
+        
+        # Print results
+        # print(f"distance = {results.distance_mm} mm, "
+        #         f"sigma = {results.sigma_mm} mm")
 
-            # Print loop frequency once per second
-            elapsed = now - t0
-            if elapsed >= 2.0:
-                hz = count / elapsed
+        # Store results
+        latest_distance = self.results.distance_mm
+        latest_sigma = self.results.sigma_mm
+        latest_status = self.results.range_status
+        
 
-                print(f"device=0x{device.value:02x}",
-                    f"rate={hz:.1f} Hz, "
-                    f"distance={latest_distance} mm, "
-                    f"sigma={latest_sigma} mm, "
-                    f"status={latest_status}"
-                )
-                
-                # Reset rate timer
-                count = 0
-                t0 = now
-
-            time.sleep((timing_budget_ms-5)/1000) # Block function
+        print(f"device=0x{self.addr.value:02x}",
+            f"distance={latest_distance} mm, "
+            f"sigma={latest_sigma} mm, "
+            f"status={latest_status}"
+        )
 
         ######################## End of measurement loop #######################
     

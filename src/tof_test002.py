@@ -1,4 +1,24 @@
 import tof
+import time
 
-tof1 = tof.TofSensor(tof_idx=1)
-tof2 = tof.TofSensor(tof_idx=2)
+def poll_tof_sensors(sensors):
+    for sensor in sensors:
+        sensor.poll_once()
+
+# tof1 = tof.TofSensor(tof_idx=1)
+# tof2 = tof.TofSensor(tof_idx=2)
+# tof1.poll_once()
+# tof2.poll_once()
+# tof2 = tof.TofSensor(tof_idx=2)
+
+sensors = [
+    tof.TofSensor(tof_idx=1),
+    tof.TofSensor(tof_idx=2),
+    # tof.TofSensor(tof_idx=3),
+    # tof.TofSensor(tof_idx=4),
+]
+
+while True:
+    poll_tof_sensors(sensors)
+
+    time.sleep(0.5)
