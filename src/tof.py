@@ -1,7 +1,8 @@
 
-import ctypes as c 
+import ctypes as c # For accessing VL53L4CD driver through shared libary
 import time
-import serial
+# import serial # Uncomment if using external USB serial xshut controller (Xiao)
+import spidev
 
 # Shared library compiled in GCC from platform.c and VL53L4CD_api.c
 lib = c.CDLL("./tof_driver/libvl53l4cd.so")
@@ -59,6 +60,16 @@ lib.VL53L4CD_SetI2CAddress.argtypes = [c.c_uint16, c.c_uint8]
 lib.VL53L4CD_SetI2CAddress.restype = c.c_uint8
 ############################## End of Bindings ###############################
 
+def xshut_reset():
+    spi = spidev.SpiDev()
+    spi.open(0, 0)          # /dev/spidev0.0
+    spi.max_speed_hz = 100000
+    spi.mode = 0
+    # spi.cshigh = True 
+    spi.xfer2([0x00]) # Reset shift register. All outputs off (all xshut off)
+    spi.close()
+    time.sleep(0.05) # Allow signals to fully drop off
+
 
 
 # ToF Sensor class for VL53L4CD
@@ -77,29 +88,15 @@ class TofSensor:
         self.init()
 
     def xshut_on(self):
-        print(f"Attempting xshut turn on for sensor {self.tof_idx}")
+        spi = spidev.SpiDev()
+        spi.open(0, 0)          # /dev/spidev0.0
+        spi.max_speed_hz = 100000
+        spi.mode = 0
+        # Outputs of 74HC595N: QB QC QD QE, so index << 1
+        spi.xfer2([(xshut[self.tof_idx] << 1) & 0xFF]) 
+        spi.close()
+        time.sleep(0.05) # Allow xshut to stabilise
 
-        ser = serial.Serial("/dev/ttyACM0", 115200, timeout=1)
-        # time.sleep(2)
-
-        # print(ser.read_all().decode(errors="ignore")
-
-        # ser.write(b"15\n")
-        for i in range(20):
-            ser.write(f"{xshut[self.tof_idx]}\n".encode())
-            ser.flush()
-
-            time.sleep(0.05)
-
-            # print("reply:")
-            response = ser.read_all().decode(errors="ignore")
-            if response == f"set {xshut[self.tof_idx]}":
-                break
-            elif i > 19:
-                print(f"Timeout while turning on sensor {self.tof_idx}.")
-
-
-        ser.close()
 
     def change_addr(self):
         if self.tof_idx == 0:
@@ -198,4 +195,29 @@ class TofSensor:
         )
 
         ######################## End of measurement loop #######################
-    
+
+# Spare function if external USB controller is needed instead of shift register
+
+    # spare def xshut_on(self):
+    #     print(f"Attempting xshut turn on for sensor {self.tof_idx}")
+
+    #     ser = serial.Serial("/dev/ttyACM0", 115200, timeout=1)
+    #     # time.sleep(2)
+
+    #     # print(ser.read_all().decode(errors="ignore")
+
+    #     # ser.write(b"15\n")
+    #     for i in range(20):
+    #         ser.write(f"{xshut[self.tof_idx]}\n".encode())
+    #         ser.flush()
+
+    #         time.sleep(0.05)
+
+    #         # print("reply:")
+    #         response = ser.read_all().decode(errors="ignore")
+    #         if response == f"set {xshut[self.tof_idx]}":
+    #             break
+    #         elif i > 19:
+    #             print(f"Timeout while turning on sensor {self.tof_idx}.")
+
+    #     ser.close()
