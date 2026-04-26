@@ -16,7 +16,7 @@ After=dev-spidev0.0.device
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 /home/user/code/predictive-rover-suspension/tools/xshut_startup.py
+ExecStart=/home/user/code/predictive-rover-suspension/.venv/bin/python /home/user/code/predictive-rover-suspension/tools/xshut_startup.py
 
 [Install]
 WantedBy=multi-user.target
@@ -28,15 +28,15 @@ sudo systemctl daemon-reload
 
 Enable permanently using terminal:
 ```bash
-sudo systemctl enable xshut-reset.service
+sudo systemctl enable xshut_startup.service
 ```
 Check status:
 ```bash
-sudo systemctl status xshut-reset.service
+sudo systemctl status xshut_startup.service
 ```
 View logs:
 ```bash
-journalctl -u rover.service -f
+journalctl -u xshut_startup.service -f
 ```
 
 ## Start ```main.py``` automatically:
@@ -54,7 +54,7 @@ Requires=xshut-reset.service
 
 [Service]
 WorkingDirectory=/home/user/code/predictive-rover-suspension/src
-ExecStart=/usr/bin/python3 /home/user/code/predictive-rover-suspension/src/main.py
+ExecStart=/home/user/code/predictive-rover-suspension/.venv/bin/python /home/user/code/predictive-rover-suspension/src/main.py
 Restart=on-failure
 User=user
 
