@@ -188,13 +188,13 @@ class TofSensor:
         latest_status = self.results.range_status
         
 
-        print(f"device=0x{self.addr.value:02x}",
-            f"distance={latest_distance} mm, "
-            f"sigma={latest_sigma} mm, "
-            f"status={latest_status}"
-        )
+        # print(f"device=0x{self.addr.value:02x}",
+        #     f"distance={latest_distance} mm, "
+        #     f"sigma={latest_sigma} mm, "
+        #     f"status={latest_status}"
+        # )
 
-        ######################## End of measurement loop #######################
+
 
 # Spare function if external USB controller is needed instead of shift register
 
