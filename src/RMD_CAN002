@@ -1,0 +1,315 @@
+import subprocess
+import can
+import struct
+import time
+import gpiod
+import math
+
+
+# Initialise GPIO for can0 and can1
+gpio_request = None # For gpiod as object showing ownership of pin (GPIO line)
+
+
+def enable_can_transceivers():
+    global gpio_request
+
+    gpio_request = gpiod.request_lines(
+        "/dev/gpiochip0",
+        config={
+            43: gpiod.LineSettings(
+                direction=gpiod.line.Direction.OUTPUT,
+                output_value=gpiod.line.Value.INACTIVE
+            ),
+            106: gpiod.LineSettings(
+                direction=gpiod.line.Direction.OUTPUT,
+                output_value=gpiod.line.Value.INACTIVE
+            ),
+        },
+        consumer="rover_app_can"
+    )
+
+    print("GPIO lines 43 & 106 held low. can0 & can1 enabled.")
+
+print("GPIO lines 43 & 106 held low. can0 & can1 enabled.")
+
+def run_cmd(cmd):
+    print("Running:", cmd)
+    subprocess.run(cmd, check=True)
+
+def clamp(x, x_min, x_max):
+    return max(x_min, min(x_max, x))
+
+
+
+class CanBus:
+    def __init__(self, channel=0, bitrate=1000000):
+        self.channel = channel
+        self.bitrate = bitrate
+
+    def start(self):
+        run_cmd(["sudo", "ip", "link", "set", f"can{self.channel}", "down"])
+        run_cmd(["sudo", "ip", "link", "set", f"can{self.channel}", "type", 
+                 "can", "bitrate", f"{self.bitrate}"])
+        run_cmd(["sudo", "ip", "link", "set", f"can{self.channel}", "up"])
+
+        self.bus = can.interface.Bus(
+            channel=f"can{self.channel}",
+            interface="socketcan"
+        )
+        return self
+
+    def stop(self):
+        self.bus.shutdown()
+        run_cmd(["sudo", "ip", "link", "set", f"can{self.channel}", "down"])
+
+class RMDMotor:
+    def __init__(self, bus, motor_id=1):
+        self.bus = bus
+        self.motor_id = motor_id
+        self.tx_id = 0x140 + motor_id
+        self.rx_id = 0x240 + motor_id
+        self.mit_id = 0x400 + motor_id
+
+    def send(self, data):
+        msg = can.Message(
+            # arbitration_id=self.tx_id,
+            arbitration_id=self.mit_id,
+            data=data,
+            is_extended_id=False
+        )
+        self.bus.send(msg)
+
+    def shutdown(self):
+        self.send([0x80, 0, 0, 0, 0, 0, 0, 0])
+
+    def stop_motion(self):
+        self.send([0x81, 0, 0, 0, 0, 0, 0, 0])
+
+    def speed_dps(self, dps):
+        speed = int(dps * 100)
+        data = [0xA2, 0, 0, 0] + list(struct.pack("<i", speed))
+        self.send(data)
+
+    # def read_angle_deg(self):
+    #     reply = self.send_and_wait([0x92, 0, 0, 0, 0, 0, 0, 0])
+    #     raw = struct.unpack("<i", bytes(reply[4:8]))[0]
+    #     return raw / 100.0
+
+    def read_angle_deg(self):
+        reply = self.send_and_wait([0x92, 0, 0, 0, 0, 0, 0, 0])
+        raw = struct.unpack("<i", bytes(reply[4:8]))[0]
+        return raw / 100.0
+
+    def position_abs_deg(self, deg, max_speed_dps=10):
+        angle = int(deg * 100)
+        data = [0xA4, 0]
+        data += list(struct.pack("<H", max_speed_dps))
+        data += list(struct.pack("<i", angle))
+        self.send(data)
+
+    def steering_deg(self, offset_deg, zero_deg, max_speed_dps=10):
+        offset_deg = max(-80, min(80, offset_deg))
+        self.position_abs_deg(zero_deg + offset_deg, max_speed_dps)
+
+    def send_and_wait(self, data, timeout=0.1):
+        msg = can.Message(
+            arbitration_id=self.tx_id,
+            data=data,
+            is_extended_id=False
+        )
+        self.bus.send(msg)
+
+        start = time.time()
+        while time.time() - start < timeout:
+            reply = self.bus.recv(timeout=timeout)
+            if reply is None:
+                continue
+            if reply.arbitration_id == self.rx_id:
+                return reply.data
+
+        raise TimeoutError("No response from motor")
+    
+    
+    # MIT style
+    def float_to_uint(self, x, x_min, x_max, bits):
+        span = x_max - x_min
+        return int((x - x_min) * ((1 << bits) - 1) / span)
+
+    def send_mit(self, p_des, v_des, kp, kd, t_ff):
+        # limits (from manual)
+        P_MIN, P_MAX = -12.5, 12.5
+        V_MIN, V_MAX = -45.0, 45.0
+        KP_MIN, KP_MAX = 0.0, 500.0
+        KD_MIN, KD_MAX = 0.0, 5.0
+        T_MIN, T_MAX = -24.0, 24.0
+
+        p_int  = self.float_to_uint(p_des, P_MIN, P_MAX, 16)
+        v_int  = self.float_to_uint(v_des, V_MIN, V_MAX, 12)
+        kp_int = self.float_to_uint(kp, KP_MIN, KP_MAX, 12)
+        kd_int = self.float_to_uint(kd, KD_MIN, KD_MAX, 12)
+        t_int  = self.float_to_uint(t_ff, T_MIN, T_MAX, 12)
+
+        p_des = clamp(p_des, P_MIN, P_MAX)
+        v_des = clamp(v_des, V_MIN, V_MAX)
+        kp    = clamp(kp, KP_MIN, KP_MAX)
+        kd    = clamp(kd, KD_MIN, KD_MAX)
+        t_ff  = clamp(t_ff, T_MIN, T_MAX)
+
+        data = [0]*8
+        data[0] = (p_int >> 8) & 0xFF
+        data[1] = p_int & 0xFF
+        data[2] = (v_int >> 4) & 0xFF
+        data[3] = ((v_int & 0xF) << 4) | ((kp_int >> 8) & 0xF)
+        data[4] = kp_int & 0xFF
+        data[5] = (kd_int >> 4) & 0xFF
+        data[6] = ((kd_int & 0xF) << 4) | ((t_int >> 8) & 0xF)
+        data[7] = t_int & 0xFF
+
+        msg = can.Message(
+            arbitration_id=0x400 + self.motor_id,
+            data=data,
+            is_extended_id=False
+        )
+        self.bus.send(msg)
+
+    def shutdown(self):
+        msg = can.Message(
+            arbitration_id=self.tx_id,   # 0x144 for motor ID 4
+            data=[0x80, 0, 0, 0, 0, 0, 0, 0],
+            is_extended_id=False
+        )
+        self.bus.send(msg)
+
+    def brake_release(self):
+        self.send([0x77, 0, 0, 0, 0, 0, 0, 0])
+
+    def brake_release(self):
+        msg = can.Message(
+            arbitration_id=self.tx_id,   # 0x144 for motor ID 4
+            data=[0x77, 0, 0, 0, 0, 0, 0, 0],
+            is_extended_id=False
+        )
+        self.bus.send(msg)   
+
+    def send_motion(self, p_des=0.0, v_des=0.0, kp=0.0, kd=0.0, t_ff=0.0):
+        p_int  = self.float_to_uint(p_des, -12.5, 12.5, 16)
+        v_int  = self.float_to_uint(v_des, -45.0, 45.0, 12)
+        kp_int = self.float_to_uint(kp, 0.0, 500.0, 12)
+        kd_int = self.float_to_uint(kd, 0.0, 5.0, 12)
+        t_int  = self.float_to_uint(t_ff, -24.0, 24.0, 12)
+
+        data = [
+            (p_int >> 8) & 0xFF,
+            p_int & 0xFF,
+            (v_int >> 4) & 0xFF,
+            ((v_int & 0xF) << 4) | ((kp_int >> 8) & 0xF),
+            kp_int & 0xFF,
+            (kd_int >> 4) & 0xFF,
+            ((kd_int & 0xF) << 4) | ((t_int >> 8) & 0xF),
+            t_int & 0xFF,
+        ]
+
+        msg = can.Message(
+            arbitration_id=self.mit_id,
+            data=data,
+            is_extended_id=False
+        )
+        self.bus.send(msg)
+
+    def motion_neutral(self, kd=0.25):
+        self.send_motion(
+            p_des=0.0,
+            v_des=0.0,
+            kp=0.0,
+            kd=kd,
+            t_ff=0.0
+        )
+
+    def motion_velocity(self, rad_s, kd=0.25):
+        self.send_motion(p_des=0.0, v_des=rad_s, kp=0.0, kd=kd, t_ff=0.0)
+
+    def steering(self, angle_deg):
+        angle_rad = max(-80, min(80, angle_deg)) * math.pi / 180
+        motor.send_motion(
+            p_des=angle_rad,
+            v_des=0,
+            kp=2.0,
+            kd=0.02,
+            t_ff=0
+        )
+
+
+
+if __name__ == "__main__":
+    enable_can_transceivers()
+
+    canbus = CanBus(channel=0, bitrate=1000000).start()
+    time.sleep(5)
+
+    motor = RMDMotor(canbus.bus, motor_id=4)
+    print("Motor ID:", motor.motor_id)
+    print("MIT CAN ID:", hex(motor.mit_id))
+
+try:
+    motor.shutdown()
+    time.sleep(0.2)
+
+    motor.motion_neutral()
+    time.sleep(0.1)
+
+    motor.brake_release()
+    time.sleep(1)
+
+    # motor.motion_velocity(rad_s=6.28, kd=0.25)
+    # time.sleep(4)
+
+    motor.steering(-80)
+    time.sleep(0.5)
+    motor.steering(-70)
+    time.sleep(0.5)
+    motor.steering(-60)
+    time.sleep(0.5)
+    motor.steering(-50)
+    time.sleep(0.5)
+    motor.steering(-40)
+    time.sleep(0.5)
+    motor.steering(-30)
+    time.sleep(0.5)
+    motor.steering(-20)
+    time.sleep(0.5)
+    motor.steering(-10)
+    time.sleep(0.5)
+    motor.steering(0)
+    time.sleep(0.5)
+    motor.steering(10)
+    time.sleep(0.5)
+    motor.steering(20)
+    time.sleep(0.5)
+    motor.steering(30)
+    time.sleep(0.5)
+    motor.steering(40)
+    time.sleep(0.5)
+    motor.steering(50)
+    time.sleep(0.5)
+    motor.steering(60)
+    time.sleep(0.5)
+    motor.steering(70)
+    time.sleep(0.5)
+    motor.steering(80)
+    time.sleep(0.5)
+
+
+    motor.motion_neutral(kd=0.25)
+    time.sleep(1)
+
+finally:
+    motor.shutdown()
+    canbus.stop()
+
+    # while True:
+    #     time.sleep(0.5)
+
+    # canbus.stop()
+
+
+

@@ -29,10 +29,10 @@ print("GPIO lines 43 & 106 held low. can0 & can1 enabled.")
 can0 = CanBus(channel=0, bitrate=1000000)
 can0.start()
 
-tof1 = tof.TofSensor(xshut=1)
-tof2 = tof.TofSensor(xshut=2)
-tof3 = tof.TofSensor(xshut=3)
-tof4 = tof.TofSensor(xshut=4)
+# tof1 = tof.TofSensor(xshut=1)
+# tof2 = tof.TofSensor(xshut=2)
+# tof3 = tof.TofSensor(xshut=3)
+# tof4 = tof.TofSensor(xshut=4)
 
 
 # Initialise can1 for other motors
