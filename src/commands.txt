@@ -1,0 +1,43 @@
+
+
+ 7F FF 83 00 00 00 47 FF
+
+
+Sending known good Cubemars to RMD-L
+cansend can0 404#90617FF0100107FF
+
+
+# neutral
+cansend can0 404#7FFF7FF0000007FF
+
+# emergency stop
+cansend can0 144#8000000000000000
+
+
+cansend can0 001#FFFFFFFFFFFFFFFD
+cansend can0 003#FFFFFFFFFFFFFFFE
+cansend can0 003#FFFFFFFFFFFFFFFC
+
+
+
+cansend can0 001#FFFFFFFFFFFFFFFD
+cansend can0 002#FFFFFFFFFFFFFFFD
+cansend can0 003#FFFFFFFFFFFFFFFD
+
+cansend can0 001#FFFFFFFFFFFFFFFE
+cansend can0 002#FFFFFFFFFFFFFFFE
+cansend can0 003#FFFFFFFFFFFFFFFE
+
+
+
+candump -tz can0
+
+sudo gpioset --mode=wait 0 43=0 #enable CAN0
+
+sudo ip link set can0 down
+
+sudo ip link set can0 type can bitrate 1000000
+
+sudo ip link set can0 up
+
+

@@ -383,21 +383,26 @@ class CubeMarsGL60II(MITMotor):
     """
     CubeMars GL60 II MIT-style motor.
 
-    Assumption based on common CubeMars MIT-style operation:
-    - Motion command arbitration ID is the motor ID itself.
-    - Optional special frames exist for enter/exit/zero depending on firmware.
+    Your known working manual sequence:
+        cansend can0 001#FFFFFFFFFFFFFFFD
+        cansend can0 003#FFFFFFFFFFFFFFFE
+        cansend can0 003#FFFFFFFFFFFFFFFC
 
-    Adjust command IDs/special frames if your GL60 II firmware manual differs.
+    For CubeMars:
+    - MIT command arbitration ID is the motor ID itself.
+    - motor_id=0x03 sends motion commands to 0x003.
     """
 
     ENTER_MOTOR_MODE = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC]
-    EXIT_MOTOR_MODE = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFD]
-    SET_ZERO = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE]
+    EXIT_MOTOR_MODE  = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFD]
+    SET_ZERO         = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE]
 
     def __init__(
         self,
         bus: can.BusABC,
-        motor_id: int,
+        motor_id: int = 0x03,
+        *,
+        reset_id: int = 0x001,
         **kwargs,
     ):
         super().__init__(
@@ -407,10 +412,17 @@ class CubeMarsGL60II(MITMotor):
             **kwargs,
         )
 
-    def _send_special(self, data: list[int]) -> None:
+        self.reset_id = reset_id
+
+    def _send_special(
+        self,
+        data: list[int],
+        *,
+        arbitration_id: Optional[int] = None,
+    ) -> None:
         self.bus.send(
             can.Message(
-                arbitration_id=self.mit_id,
+                arbitration_id=self.mit_id if arbitration_id is None else arbitration_id,
                 data=data,
                 is_extended_id=False,
             )
@@ -419,24 +431,63 @@ class CubeMarsGL60II(MITMotor):
     def enter_motor_mode(self) -> None:
         self._send_special(self.ENTER_MOTOR_MODE)
 
+    # def exit_motor_mode(self) -> None:
+    #     self._send_special(
+    #         self.EXIT_MOTOR_MODE,
+    #         arbitration_id=self.reset_id,
+    #     )
+    #     self._enabled = False
     def exit_motor_mode(self) -> None:
-        self._send_special(self.EXIT_MOTOR_MODE)
+        self._send_special(
+            self.EXIT_MOTOR_MODE,
+            arbitration_id=self.mit_id,
+        )
         self._enabled = False
 
     def set_current_position_zero(self) -> None:
         self._send_special(self.SET_ZERO)
+        self._zero_rad = 0.0
         self._last_command_deg = 0.0
+        self._filtered_target_deg = 0.0
 
-    def startup(self, *, set_zero: bool = False) -> None:
+    def startup(
+        self,
+        *,
+        use_current_position_as_zero: bool = True,
+        set_zero: bool = False,
+    ) -> None:
         """
-        Enter MIT mode and optionally set current position as zero.
+        Startup for CubeMars GL60 II.
 
-        For final steering use, only call set_zero when the mechanism is physically
-        centred and you intentionally want to redefine zero.
+        set_zero=True sends the hardware zero command:
+            0x003#FFFFFFFFFFFFFFFE
+
+        use_current_position_as_zero is accepted so the same app code can be used
+        for RMD and CubeMars, but for CubeMars this class currently does not read
+        feedback position before startup. So it behaves as software-zero = 0 rad.
+
+        Typical safe use:
+            startup(set_zero=False)
+
+        Known manual zeroing use:
+            startup(set_zero=True)
         """
-        self.enter_motor_mode()
+
+        # Match your known first manual frame:
+        # cansend can0 001#FFFFFFFFFFFFFFFD
+        self._send_special(
+            self.EXIT_MOTOR_MODE,
+            arbitration_id=self.reset_id,
+        )
+
         if set_zero:
+            # cansend can0 003#FFFFFFFFFFFFFFFE
             self.set_current_position_zero()
+
+        # cansend can0 003#FFFFFFFFFFFFFFFC
+        self.enter_motor_mode()
+
+        self.set_software_zero_rad(0.0)
         self.arm_at_zero()
 
     def shutdown(self) -> None:
