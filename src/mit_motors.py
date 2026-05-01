@@ -51,6 +51,8 @@ class MITLimits:
 
 class MITMotor:
     
+    limits = MITLimits()
+    
     def move_smooth(self, start_deg, end_deg, duration_s, rate_hz=100, sharpness=0.7):
         """
         Blocking test helper: smoothly move between two angles.
@@ -81,7 +83,7 @@ class MITMotor:
     Subclasses define CAN IDs and any motor-specific startup/shutdown commands.
     """
 
-    limits = MITLimits()
+    
 
     def __init__(
         self,
@@ -474,11 +476,11 @@ class CubeMarsGL60II(MITMotor):
         """
 
         # Match your known first manual frame:
-        # cansend can0 001#FFFFFFFFFFFFFFFD
-        self._send_special(
-            self.EXIT_MOTOR_MODE,
-            arbitration_id=self.reset_id,
-        )
+            # cansend can0 001#FFFFFFFFFFFFFFFD
+            # self._send_special(
+            #     self.EXIT_MOTOR_MODE,
+            #     arbitration_id=self.reset_id,
+            # )
 
         if set_zero:
             # cansend can0 003#FFFFFFFFFFFFFFFE
