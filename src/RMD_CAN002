@@ -241,12 +241,13 @@ class RMDMotor:
 
 
 if __name__ == "__main__":
-    enable_can_transceivers()
+    # enable_can_transceivers()
 
-    canbus = CanBus(channel=0, bitrate=1000000).start()
-    time.sleep(5)
+    # canbus = CanBus(channel=0, bitrate=1000000).start()
+    # time.sleep(5)
 
-    motor = RMDMotor(canbus.bus, motor_id=4)
+    can0 = can.Bus(interface='socketcan', channel='can0')
+    motor = RMDMotor(bus=can0, motor_id=4)
     print("Motor ID:", motor.motor_id)
     print("MIT CAN ID:", hex(motor.mit_id))
 

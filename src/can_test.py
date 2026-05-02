@@ -1,0 +1,30 @@
+import can
+
+can0 = can.Bus(
+    interface='socketcan',
+    channel='can0'
+)
+
+msg1 = can.Message(
+    arbitration_id=0x001,
+    data=[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfd],
+    is_extended_id=False
+)
+
+msg2 = can.Message(
+    arbitration_id=0x002,
+    data=[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfd],
+    is_extended_id=False
+)
+
+msg3 = can.Message(
+    arbitration_id=0x003,
+    data=[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfd],
+    is_extended_id=False
+)
+
+
+can0.send(msg1)
+can0.send(msg2)
+can0.send(msg3)
+

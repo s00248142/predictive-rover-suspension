@@ -135,16 +135,6 @@ class MITMotor:
         self._filtered_target_deg: float = 0.0 # From low-pass filter
         self._enabled: bool = False
 
-    # Directly send defined list as frame
-    def _send_mit_special(self, data: list[int]):
-        self.bus.send(
-            can.Message(
-                arbitration_id=self.mit_id,
-                data=data,
-                is_extended_id=False,
-            )
-        )
-
     # Internal method to build an MIT-style CAN frame
     def _pack_mit_frame(
         self,
@@ -200,12 +190,6 @@ class MITMotor:
             )
         )
 
-        # Add delay for RMD motor reply
-        delay_s = getattr(self, "post_command_delay_s", 0.0)
-        if delay_s > 0.0:
-            time.sleep(delay_s)
-
-
     # def arm_at_zero(self) -> None:
     #     """
     #     Send a zero-position hold command.
@@ -217,7 +201,6 @@ class MITMotor:
     #     self._enabled = True
     #     self.command_position_deg(0.0)
 
-    # Don't use this command directly. Too fast.
     def command_position_deg(
         self,
         target_deg: float,
@@ -265,7 +248,7 @@ class MITMotor:
         self,
         target_deg: float,
         *,
-        fluidity: float = 1,
+        fluidity: float = 0.7,
         dt: float = 0.01,
         kp: float = None,
         kd: float = None,
@@ -294,8 +277,6 @@ class MITMotor:
         alpha = dt / (tau + dt)
 
         self._filtered_target_deg += alpha * (target_deg - self._filtered_target_deg)
-        
-        # time.sleep(0.005)
 
         return self.command_position_deg(
             self._filtered_target_deg,
@@ -338,15 +319,12 @@ class RMDL5015(MITMotor):
     """
     SHUTDOWN = [0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
     BRAKE_RELEASE = [0x77, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-    BRAKE_LOCK = [0x78, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-    MIT_NEUTRAL = [0x7F, 0xFF, 0x7F, 0xF0, 0x00, 0x00, 0x07, 0xFF]
     
 
     def __init__(
         self,
         bus: can.BusABC,
         motor_id: int = 4,
-        post_command_delay_s = 0.003, # Required due to slow RMD CAN response
         **kwargs,
     ):
         super().__init__(
@@ -358,7 +336,6 @@ class RMDL5015(MITMotor):
         self.tx_id = 0x140 + motor_id # Normal commands for motor at this addr
         self.rx_id = 0x240 + motor_id # Receive msg from motor from this addr
         self.motion_rx_id = 0x500 + motor_id # MIT mode replies
-        self.post_command_delay_s = post_command_delay_s # RMD delay for reply
 
     # def _send_standard(self, data: list[int]) -> None:
     #     self.bus.send(
@@ -368,7 +345,12 @@ class RMDL5015(MITMotor):
     #             is_extended_id=False,
     #         )
     #     )
-    def _send_special(self, data: list[int]):
+    def _send_special(
+        self,
+        data: list[int],
+        *,
+        arbitration_id: int = None,
+    ):
         self.bus.send(
             can.Message(
                 arbitration_id=self.tx_id,
@@ -381,13 +363,6 @@ class RMDL5015(MITMotor):
     def shutdown(self):
         self._send_special(self.SHUTDOWN)
         self._enabled = False
-        time.sleep(0.1)
-        self._send_special(self.BRAKE_LOCK)
-
-    # Neutral MIT output using MIT command 0x7fff7ff0000007ff.
-    def neutral(self):
-        self._send_mit_special(self.MIT_NEUTRAL)
-        self._enabled = False
 
     # Release holding brake using RMD command 0x7700000000000000.
     def brake_release(self):
@@ -397,12 +372,11 @@ class RMDL5015(MITMotor):
         """
         Read one RMD Motion Mode feedback frame and return position in radians.
         Feedback ID is 0x500 + motor_id. The first byte is motor ID, 
-        then DATA[1:3] contains the packed 16-bit position value using the same 
+        then DATA[1, 2] contains the packed 16-bit position value using the same 
         -12.5..+12.5 rad range.
         """
         # Ask for a feedback frame by sending a passive zero-gain MIT frame.
-        # self._send_mit_raw(p_des=0.0, v_des=0.0, kp=0.0, kd=0.0, t_ff=0.0)
-        self._send_mit_special(self.MIT_NEUTRAL)
+        self._send_mit_raw(p_des=0.0, v_des=0.0, kp=0.0, kd=0.0, t_ff=0.0)
 
         # Block until message is received from motor (time-out of 0.2 seconds).
         start = time.time()
@@ -414,18 +388,14 @@ class RMDL5015(MITMotor):
                 continue
             if len(msg.data) < 8: # Eight bytes in a list
                 continue
-            # print(f"Reply from zero-gain command: {msg.data}") # Uncomment to debug
+            # print(msg.data) # Uncomment to debug
             # input("Press Enter to continue...") # Uncomment to debug
             p_int = (msg.data[1] << 8) | msg.data[2] # Combine two bytes as int
-            # print(f"\nRead position from CAN (16-bit int):{p_int}") # DB
-            # input("Press Enter to continue...") # Uncomment to debug
             span = self.limits.p_max - self.limits.p_min # -12 to +12 radians
-            # print(f"\nspan: {span}") # Uncomment to debug
+            # print(span) # Uncomment to debug
             # input("Press Enter to continue...") # Uncomment to debug
-            non_centre_aligned_pos = p_int * span / ((1 << 16) - 1)
-            # print(f"\nNon-centre position: {non_centre_aligned_pos}") # Uncomment to debug
-            # input("Press Enter to continue...") # Uncomment to debug
-            current_pos = non_centre_aligned_pos + self.limits.p_min
+
+            current_pos = (p_int * span / ((1 << 16) - 1)) + self.limits.p_min
             return current_pos
 
         raise TimeoutError("No RMD motion feedback frame received")
@@ -448,15 +418,10 @@ class RMDL5015(MITMotor):
         #     self.set_software_zero_rad(0.0)
 
         current_rad = self.read_motion_feedback_position_rad()
-        # print(f"current position: {current_rad} radians") # Uncomment to debug
-        # input("Press Enter to continue...") # Uncomment to debug
+        print(current_rad) # Uncomment to debug
+        input("Press Enter to continue...") # Uncomment to debug
 
         self.set_software_zero_rad(current_rad)
-
-        # Send neutral before releasing brake
-        # self.neutral()
-        time.sleep(0.1)
-        
 
         # self.arm_at_zero()
         self.brake_release()
