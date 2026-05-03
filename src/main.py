@@ -1,33 +1,119 @@
+'''
+********************************************************************************
+* File Name: Lab_5c.py
+* Description: Lab 5c. FIR lowpass filter applied using SciPy funtions. 
+*              Plot of downsampled signal y(m) from anti-aliased w(n).
+*              Plot shows the final signal in the frequency domain after FFT.
+* Programmer: Alan Ryan (s00248142)
+* Date: 17/04/2025
+* Version: 1.0
+********************************************************************************
+'''
+# ******************************************************************************
+# Standard modules
+# ******************************************************************************
+
 import time
-from helpers import *
-import tof
-import gpiod
+
+# ******************************************************************************
+# Installed modules
+# ******************************************************************************
+
+import pygame # For hand controller
+import can # python-can
+
+# ******************************************************************************
+# Custom modules
+# ******************************************************************************
+
+import tof # Custom module for time-of-flight sensors
+from mit_motors import RMDL5015, CubeMarsGL60II # Custom module
+import joystick_map as joy
+
+# ******************************************************************************
+# Initialise hand controller
+# ******************************************************************************
+
+pygame.init()
+pygame.joystick.init()
+
+js = pygame.joystick.Joystick(0) # Check ls /dev/input/js* for js0 if error
+js.init()
+
+# ******************************************************************************
+# Initialise motors
+# ******************************************************************************
+
+# Select CAN bus 'can0' for initiating motor objects
+can0 = can.Bus(interface='socketcan', channel='can0')
+
+print("ready")
+time.sleep(3)
+
+left_motor = CubeMarsGL60II(
+    bus=can0,
+    motor_id=1,
+    lower_deg=-90,
+    upper_deg=1,
+    max_delta_deg=5,
+    direction=-1,
+    default_kp=8.0,
+    default_kd=0.2,
+)
+
+right_motor = CubeMarsGL60II(
+    bus=can0,
+    motor_id=2,
+    lower_deg=-90,
+    upper_deg=1,
+    max_delta_deg=5,
+    direction=1,
+    default_kp=8.0,
+    default_kd=0.2,
+)
+
+rear_motor = CubeMarsGL60II(
+    bus=can0,
+    motor_id=3,
+    lower_deg=-90,
+    upper_deg=1,
+    max_delta_deg=5,
+    direction=1,
+    default_kp=4.0,
+    default_kd=0.1,
+)
+
+steering_motor = RMDL5015(
+    bus=can0,
+    motor_id=4,
+    lower_deg=-80,
+    upper_deg=80,
+    max_delta_deg=5,
+    direction=1,
+    default_kp=6,
+    default_kd=0.1,
+)
+
+left_motor.startup()
+time.sleep(0.05)
+
+right_motor.startup()
+time.sleep(0.05)
+
+rear_motor.startup()
+time.sleep(0.05)
+
+steering_motor.startup()
+time.sleep(0.05)
 
 
 # Initialise I2C for display to indicate program start (blink bottom bar x 2)
 
-# Initialise GPIO for can0 and can1
-gpio_request = None # For gpiod as object showing ownership of pin (GPIO line)
-gpio_request = gpiod.request_lines(
-    "/dev/gpiochip0",
-    config={
-        43: gpiod.LineSettings(
-            direction=gpiod.line.Direction.OUTPUT,
-            output_value=gpiod.line.Value.INACTIVE
-        ),
-        106: gpiod.LineSettings(
-            direction=gpiod.line.Direction.OUTPUT,
-            output_value=gpiod.line.Value.INACTIVE
-        ),
-    },
-    consumer="rover_app_can" # visible to Linux GPIO queries.
-)
+# Select CAN bus 'can0' for initiating motor objects (CAN initialised in daemon)
+can0 = can.Bus(interface='socketcan', channel='can0')
 
-print("GPIO lines 43 & 106 held low. can0 & can1 enabled.")
 
-# Initialise can0 bus for suspension motors
-can0 = CanBus(channel=0, bitrate=1000000)
-can0.start()
+
 
 # tof1 = tof.TofSensor(xshut=1)
 # tof2 = tof.TofSensor(xshut=2)

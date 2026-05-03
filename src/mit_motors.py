@@ -265,7 +265,7 @@ class MITMotor:
         self,
         target_deg: float,
         *,
-        fluidity: float = 1,
+        fluidity: float = 0.5,
         dt: float = 0.01,
         kp: float = None,
         kd: float = None,
@@ -484,6 +484,7 @@ class CubeMarsGL60II(MITMotor):
         self,
         bus: can.BusABC,
         motor_id: int = 0x03,
+        post_command_delay_s = 0.003, # Required due to slow RMD CAN response
         **kwargs, # Pass other keyword arguments to base class.
     ):
         super().__init__(
@@ -492,6 +493,7 @@ class CubeMarsGL60II(MITMotor):
             mit_id=motor_id,
             **kwargs,
         )
+        self.post_command_delay_s = post_command_delay_s # RMD delay for reply
 
     def _send_special(
         self,

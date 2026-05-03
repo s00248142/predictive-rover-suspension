@@ -4,6 +4,7 @@ pygame.init()
 pygame.joystick.init()
 js = pygame.joystick.Joystick(0)
 js.init()
+time.sleep(1)
 
 print("axes:", js.get_numaxes(), "buttons:", js.get_numbuttons(), "hats:", js.get_numhats())
 

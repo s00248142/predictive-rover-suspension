@@ -27,7 +27,7 @@ left_motor = CubeMarsGL60II(
     upper_deg=1,
     max_delta_deg=5,
     direction=-1,
-    default_kp=8.0,
+    default_kp=12.0,
     default_kd=0.2,
 )
 
@@ -38,7 +38,7 @@ right_motor = CubeMarsGL60II(
     upper_deg=1,
     max_delta_deg=5,
     direction=1,
-    default_kp=8.0,
+    default_kp=12.0,
     default_kd=0.2,
 )
 
@@ -49,21 +49,21 @@ rear_motor = CubeMarsGL60II(
     upper_deg=1,
     max_delta_deg=5,
     direction=1,
-    default_kp=4.0,
+    default_kp=6.0,
     default_kd=0.1,
 )
 
 left_motor.startup()
-time.sleep(0.05)
+time.sleep(0.1)
 
 right_motor.startup()
-time.sleep(0.05)
+time.sleep(0.01)
 
 rear_motor.startup()
-time.sleep(0.05)
+time.sleep(0.1)
 
 steering_motor.startup()
-time.sleep(0.05)
+time.sleep(0.1)
 
 # input("Startup complete. Press Enter to continue...")
 
@@ -71,7 +71,7 @@ time.sleep(0.05)
 dt = 0.01
 
 count = 0
-while count < 300:
+while count < 200:
 
 
     # suspension = -70  # e.g. -80 to +80
@@ -88,16 +88,16 @@ while count < 300:
 input("Move command sent. Press Enter to continue...")
 
 count = 0
-while count < 300:
+while count < 200:
 
 
     # suspension = -70  # e.g. -80 to +80
     # steering = 0
     
-    steering_motor.move(-20) # RMD motor
-    left_motor.move(-60)
+    steering_motor.move(-30) # RMD motor
+    left_motor.move(-50)
     right_motor.move(-80)
-    rear_motor.move(-70)
+    rear_motor.move(-65)
     
     time.sleep(dt)
     count = count + 1
@@ -105,16 +105,16 @@ while count < 300:
 input("Move command sent. Press Enter to continue...")
 
 count = 0
-while count < 300:
+while count < 200:
 
 
     # suspension = -70  # e.g. -80 to +80
     # steering = 0
     
-    steering_motor.move(20) # RMD motor
+    steering_motor.move(30) # RMD motor
     left_motor.move(-80)
-    right_motor.move(-60)
-    rear_motor.move(-70)
+    right_motor.move(-50)
+    rear_motor.move(-65)
     
     time.sleep(dt)
     count = count + 1
@@ -122,7 +122,7 @@ while count < 300:
 input("Move command sent. Press Enter to continue...")
 
 count = 0
-while count < 300:
+while count < 200:
 
     steering_motor.move(0)
     left_motor.move(0)
