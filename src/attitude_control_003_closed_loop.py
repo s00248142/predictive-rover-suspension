@@ -7,7 +7,7 @@ import pygame
 from bmi270.BMI270 import *
 
 from mit_motors import RMDL5015, CubeMarsGL60II
-import joystick_map as joy
+import joystick as joy
 
 
 def mix_body_degrees(pitch_deg, roll_deg, height_deg=0.0):
@@ -248,6 +248,13 @@ try:
             ROLL_MAX_DEG,
         )
 
+        rear_target_speed= axis_to_rpm(axis, 
+                                       rear_wheel_motor.limit_rpm_upper)
+        left_target_speed= axis_to_rpm(axis, 
+                                       left_wheel_motor.limit_rpm_upper)
+        right_target_speed= axis_to_rpm(axis, 
+                                        right_wheel_motor.limit_rpm_upper)
+
         # **********************************************************************
         # Proportional Control
         # **********************************************************************
@@ -276,6 +283,7 @@ try:
                         fluidity=FLUIDITY, dt=dt)
         steering_motor.move(0, dt=dt)
 
+
         # **********************************************************************
         # Check for EXIT or MODE requests
         # **********************************************************************
@@ -296,6 +304,10 @@ finally:
         left_motor.move(0)
         right_motor.move(0)
         rear_motor.move(0)
+        # left_wheel_motor.send_rpm(0)
+        # right_wheel_motor.send_rpm(0)
+        # rear_wheel_motor.send_rpm(0)
+
 
         time.sleep(dt)
         count = count + 1
@@ -305,3 +317,6 @@ finally:
     left_motor.shutdown()
     right_motor.shutdown()
     rear_motor.shutdown()
+    # rear_wheel_motor.shutdown()
+    # left_wheel_motor.shutdown()
+    # right_wheel_motor.shutdown()

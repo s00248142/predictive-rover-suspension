@@ -5,7 +5,7 @@ import can # python-can
 import pygame
 
 from mit_motors import RMDL5015, CubeMarsGL60II
-import joystick_map as joy
+import joystick as joy
 
 
 @dataclass

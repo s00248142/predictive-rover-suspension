@@ -7,7 +7,7 @@ import pygame
 from bmi270.BMI270 import *
 
 from mit_motors import RMDL5015, CubeMarsGL60II
-import joystick_map as joy
+import joystick as joy
 
 
 def mix_body_degrees(pitch_deg, roll_deg, height_deg=0.0):
@@ -125,10 +125,10 @@ KD_ROLL = 0.15
 # Automatic Trim for Individual Suspension Motors (Static mode only)
 # ******************************************************************************
 
-AUTO_TRIM_GAIN = 0.1
-AUTO_TRIM_DECAY = 0.01
-AUTO_TRIM_LIMIT = 20.0
-AUTO_TRIM_ENABLED = True
+# AUTO_TRIM_GAIN = 0.1
+# AUTO_TRIM_DECAY = 0.01
+# AUTO_TRIM_LIMIT = 20.0
+# AUTO_TRIM_ENABLED = True
 
 
 print("ready")

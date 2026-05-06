@@ -17,6 +17,10 @@ gpio_request = gpiod.request_lines(
         43: gpiod.LineSettings(
             direction=gpiod.line.Direction.OUTPUT,
             output_value=gpiod.line.Value.INACTIVE
+        ),
+        106: gpiod.LineSettings(
+            direction=gpiod.line.Direction.OUTPUT,
+            output_value=gpiod.line.Value.INACTIVE
         )
     },
     consumer="rover_app_can" # visible to Linux GPIO queries.
@@ -27,6 +31,8 @@ print("GPIO lines 43 held low. can0 enabled.")
 # Initialise can0 bus for suspension motors
 can0 = CanBus(channel=0, bitrate=1000000)
 can0.start()
+can1 = CanBus(channel=1, bitrate=1000000)
+can1.start()
 
 # Keep Python program alive to own GPIO line 43
 try:
@@ -39,4 +45,5 @@ except KeyboardInterrupt:
 
 finally:
     can0.stop()  
+    can1.stop()  
     gpio_request.release()

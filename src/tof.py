@@ -70,6 +70,10 @@ def xshut_reset():
     spi.close()
     time.sleep(0.05) # Allow signals to fully drop off
 
+def poll_tof_sensors(sensors):
+    for sensor in sensors:
+        sensor.poll_once()
+
 
 
 # ToF Sensor class for VL53L4CD

@@ -7,7 +7,7 @@ import pygame
 from bmi270.BMI270 import *
 
 from mit_motors import RMDL5015, CubeMarsGL60II
-import joystick_map as joy
+import joystick as joy
 
 
 def mix_body_degrees(pitch_deg, roll_deg, height_deg=0.0):

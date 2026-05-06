@@ -7,7 +7,7 @@ import pygame
 from bmi270.BMI270 import *
 
 from mit_motors import RMDL5015, CubeMarsGL60II, STM32_ESC
-import joystick_map as joy
+import joystick as joy
 
 
 def deadzone(value: float, threshold: float = 0.08) -> float:
@@ -44,17 +44,38 @@ js.init()
 
 can0 = can.Bus(interface='socketcan', channel='can0')
 
-rear_wheel_motor = STM32_ESC(
+# rear_wheel_motor = STM32_ESC(
+#     bus=can0,
+#     motor_id=7,
+#     direction=1,
+#     limit_rpm_lower=-600,
+#     limit_rpm_upper=200
+# )
+
+left_wheel_motor = STM32_ESC(
     bus=can0,
-    motor_id=7,
+    motor_id=5,
     direction=1,
     limit_rpm_lower=-600,
     limit_rpm_upper=200
-
 )
 
-rear_wheel_motor.startup()
-time.sleep(0.1)
+right_wheel_motor = STM32_ESC(
+    bus=can0,
+    motor_id=6,
+    direction=1,
+    limit_rpm_lower=-600,
+    limit_rpm_upper=200
+)
+
+# rear_wheel_motor.startup()
+# time.sleep(0.1)
+
+left_wheel_motor.startup()
+time.sleep(0.5)
+
+right_wheel_motor.startup()
+time.sleep(0.5)
 
 try:
     print("Started... Press Triangle")
@@ -83,15 +104,21 @@ try:
         pos_speed = deadzone(js.get_axis(joy.AXIS_R2))
         neg_speed = deadzone(js.get_axis(joy.AXIS_L2))
         axis = triggers_to_axis(pos_speed , neg_speed)   # R2 = forward, L2 = reverse
-        rear_target_speed= axis_to_rpm(axis, rear_wheel_motor.limit_rpm_upper)
+        # rear_target_speed= axis_to_rpm(axis, rear_wheel_motor.limit_rpm_upper)
+        left_target_speed= axis_to_rpm(axis, left_wheel_motor.limit_rpm_upper)
+        right_target_speed= axis_to_rpm(axis, right_wheel_motor.limit_rpm_upper)
         # read_speed = rear_wheel_motor.read_speed_feedback_rpm()
         # print(f"Target speed: {target_speed} \t Read speed: {read_speed}")
-        rear_wheel_motor.send_rpm(rear_target_speed)
+        # rear_wheel_motor.send_rpm(rear_target_speed)
+        left_wheel_motor.send_rpm(left_target_speed)
+        right_wheel_motor.send_rpm(right_target_speed)
 
-        fb = rear_wheel_motor.poll_feedback_stm()
+        # fb = rear_wheel_motor.poll_feedback_stm()
+        fb = left_wheel_motor.poll_feedback_stm()
+        fb = right_wheel_motor.poll_feedback_stm()
         if fb is not None:
             rpm, voltage, duty, direction, state = fb
-            print(f"rear wheel rpm: {rpm} \tvoltage: {voltage} \tduty: {duty/32768}" )
+            print(f"wheel rpm: {rpm} \tvoltage: {voltage} \tduty: {duty/32768}")
 
         # Check for EXIT or MODE requests
         if js.get_button(joy.BTN_CROSS) == 1:
@@ -132,10 +159,15 @@ finally:
     count = 0
     while count < 100:
     
-        rear_wheel_motor.send_rpm(0)
+        # rear_wheel_motor.send_rpm(0)
+        left_wheel_motor.send_rpm(0)
+        right_wheel_motor.send_rpm(0)
+
 
         time.sleep(dt)
         count = count + 1
     
     # Shutdown motors
-    rear_wheel_motor.shutdown()
+    # rear_wheel_motor.shutdown()
+    left_wheel_motor.shutdown()
+    right_wheel_motor.shutdown()
