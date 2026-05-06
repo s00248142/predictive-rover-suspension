@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import can # python-can
 import pygame
+from bmi270.BMI270 import *
 
 from mit_motors import RMDL5015, CubeMarsGL60II
 import joystick_map as joy
@@ -51,6 +52,28 @@ js.init()
 can0 = can.Bus(interface='socketcan', channel='can0')
 
 # ******************************************************************************
+# Initialise IMU
+# ******************************************************************************
+
+IMU = BMI270(I2C_PRIM_ADDR)
+IMU.load_config_file()
+
+IMU.set_mode(PERFORMANCE_MODE)
+IMU.set_acc_range(ACC_RANGE_4G) # Sets the accelerometer for +/- 4g range
+IMU.set_gyr_range(GYR_RANGE_1000) # Sets the gyroscope to 1000 DPS
+IMU.set_acc_odr(ACC_ODR_200) # ODR is output data rate
+IMU.set_gyr_odr(GYR_ODR_200)
+IMU.set_acc_bwp(ACC_BWP_OSR4)
+IMU.set_gyr_bwp(GYR_BWP_OSR4)
+IMU.disable_fifo_header()
+IMU.enable_data_streaming()
+IMU.enable_acc_filter_perf()
+IMU.enable_gyr_noise_perf()
+IMU.enable_gyr_filter_perf()
+
+
+
+# ******************************************************************************
 # Attitude Targets
 # ******************************************************************************
 
@@ -63,12 +86,20 @@ PITCH_MAX_DEG = 20.0    # Nose up
 ROLL_MIN_DEG  = -20.0
 ROLL_MAX_DEG  = 20.0
 
+KP_PITCH = 0.8
+KP_ROLL = 0.8
+
+MAX_PITCH_CMD_DEG = 10.0
+MAX_ROLL_CMD_DEG = 10.0
+
+
 # ******************************************************************************
 # Proportional Controller (P Control)
 # ******************************************************************************
-# Error:
-# pitch_error = target_pitch - pitch_deg
-# roll_error  = target_roll  - roll_deg
+# # Error:
+# pitch_error = target_pitch_deg - pitch_deg
+# roll_error  = target_roll_deg  - roll_deg
+
 # KP_PITCH = 0.4
 # KP_ROLL  = 0.4
 
@@ -171,11 +202,39 @@ try:
 
     # Main loop
     while True:
-        # pygame.event.pump()
+        # **********************************************************************
+        # Collect IMU data
+        # **********************************************************************
+        acc = IMU.get_raw_acc_data() # Collect accelerometer data from sensor
+        gyr = IMU.get_raw_gyr_data() # Collect gyroscope data from sensor
+
+        ax = acc[0] # Extract individual accelerometer axes
+        ay = acc[1]
+        az = acc[2]
+
+        ax_g = ax / 8192.0 # Convert from 16-bit raw (+/-4g mode) to g units.
+        ay_g = ay / 8192.0
+        az_g = az / 8192.0
+
+        # Derived roll formula from XYZ rotation sequence
+        roll_deg = math.degrees(math.atan2(ay_g, az_g))
+        roll_deg = -roll_deg # Invert to match model
+
+        # Derived roll formula from XYZ rotation sequence
+        pitch_deg = math.degrees(math.atan2(-ax_g,
+                                            math.sqrt(ay_g**2 + az_g**2)))
+
+        # **********************************************************************
+        # Collect Joystick Events
+        # **********************************************************************
         pygame.event.get()
 
         pitch_axis = deadzone(-js.get_axis(joy.AXIS_R_Y)) # Invert joystick 
         roll_axis = deadzone(-js.get_axis(joy.AXIS_R_X)) # Invert joystick
+
+        # **********************************************************************
+        # Set Targets
+        # **********************************************************************
 
         target_pitch_deg = map_axis_to_asymmetric_angle(
             pitch_axis,
@@ -189,10 +248,24 @@ try:
             ROLL_MAX_DEG,
         )
 
-        targets = mix_body_degrees(
-            pitch_deg=target_pitch_deg,
-            roll_deg=target_roll_deg,
-        )
+        # **********************************************************************
+        # Proportional Control
+        # **********************************************************************
+
+        pitch_error = target_pitch_deg - pitch_deg
+        roll_error  = target_roll_deg  - roll_deg
+
+        pitch_cmd = KP_PITCH * pitch_error
+        roll_cmd = KP_ROLL * roll_error
+
+        pitch_cmd = clamp(pitch_cmd, -MAX_PITCH_CMD_DEG, MAX_PITCH_CMD_DEG)
+        roll_cmd = clamp(roll_cmd, -MAX_ROLL_CMD_DEG, MAX_ROLL_CMD_DEG)
+
+        targets = mix_body_degrees(pitch_cmd, roll_cmd)
+
+        # **********************************************************************
+        # Request Motor Movement
+        # **********************************************************************
 
         # Debug before uncommenting below three lines:
         left_motor.move(BASE_HEIGHT + targets["front_left"],
@@ -202,6 +275,10 @@ try:
         rear_motor.move(BASE_HEIGHT + targets["rear"], 
                         fluidity=FLUIDITY, dt=dt)
         steering_motor.move(0, dt=dt)
+
+        # **********************************************************************
+        # Check for EXIT or MODE requests
+        # **********************************************************************
 
         if js.get_button(joy.BTN_CROSS) == 1:
             break

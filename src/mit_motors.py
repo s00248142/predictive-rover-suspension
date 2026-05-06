@@ -76,29 +76,6 @@ class MITMotor:
     # Use limits from dataclass
     limits = MITLimits()
     
-    # def move_smooth(self, start_deg, end_deg, duration_s, rate_hz=100, sharpness=0.7):
-    #     """
-    #     Blocking test helper: smoothly move between two angles.
-
-    #     Useful for bench testing, but your main app should usually call move()
-    #     repeatedly from its own fixed-rate loop instead.
-    #     """
-    #     import time
-
-    #     dt = 1.0 / rate_hz
-    #     steps = max(1, int(duration_s * rate_hz))
-
-    #     original_deg = self._last_command_deg
-    #     self._last_command_deg = start_deg
-
-    #     for i in range(steps + 1):
-    #         t = i / steps
-    #         target = start_deg + (end_deg - start_deg) * t
-    #         self.move(target, fluidity=sharpness, dt=dt)
-    #         time.sleep(dt)
-
-    #     self._last_command_deg = original_deg
-
     # Initialise with intended CAN id, direction, 
     def __init__(
         self,
@@ -113,12 +90,6 @@ class MITMotor:
         default_kp: float = 2.0, # Default from testing motors
         default_kd: float = 0.02,  
     ):
-        # if direction not in (-1, 1):
-        #     raise ValueError("direction must be 1 or -1")
-        # if lower_deg >= upper_deg:
-        #     raise ValueError("lower_deg must be less than upper_deg")
-        # if max_delta_deg <= 0:
-        #     raise ValueError("max_delta_deg must be positive")
 
         self.bus = bus 
         self.motor_id = motor_id 
@@ -134,6 +105,7 @@ class MITMotor:
         self._last_command_deg: float = 0.0 # Used to limit moves by comparing
         self._filtered_target_deg: float = 0.0 # From low-pass filter
         self._enabled: bool = False
+
 
     # Directly send defined list as frame
     def _send_mit_special(self, data: list[int]):
@@ -206,16 +178,6 @@ class MITMotor:
             time.sleep(delay_s)
 
 
-    # def arm_at_zero(self) -> None:
-    #     """
-    #     Send a zero-position hold command.
-
-    #     Call this at startup before commanding nonzero steering.
-    #     Subclasses may override if a motor needs special enter-mode commands.
-    #     """
-    #     self._last_command_deg = 0.0
-    #     self._enabled = True
-    #     self.command_position_deg(0.0)
 
     # Don't use this command directly. Too fast.
     def command_position_deg(
@@ -393,7 +355,7 @@ class RMDL5015(MITMotor):
     def brake_release(self):
         self._send_special(self.BRAKE_RELEASE)
 
-    def read_motion_feedback_position_rad(self, timeout: float = 0.2) -> float:
+    def query_zero_feedback_position_rad(self, timeout: float = 0.2) -> float:
         """
         Read one RMD Motion Mode feedback frame and return position in radians.
         Feedback ID is 0x500 + motor_id. The first byte is motor ID, 
@@ -447,7 +409,7 @@ class RMDL5015(MITMotor):
         # else:
         #     self.set_software_zero_rad(0.0)
 
-        current_rad = self.read_motion_feedback_position_rad()
+        current_rad = self.query_zero_feedback_position_rad()
         # print(f"current position: {current_rad} radians") # Uncomment to debug
         # input("Press Enter to continue...") # Uncomment to debug
 
@@ -573,3 +535,182 @@ class CubeMarsGL60II(MITMotor):
 
     def shutdown(self):
         self.exit_motor_mode()
+
+################################################################################
+# STM32 B-G431B-ESC1 Subclass
+################################################################################
+
+class STM32_ESC(MITMotor):
+    """
+    STM32 B-G431B-ESC1 with 6-step control of GM3506 gimbal motor.
+
+    Proprietary commands:
+    - 0x000 + ID for shutdown/brake commands.
+    - 0x300 + ID replies.
+    No proper MIT mode. No position or torque. 
+    First two frames will be substituted with speed control instead of position.
+    Frame [0] and [1] are speed with 0x7FFF as zero send and reply
+    Frame [2] and [3] are Voltage of supply bus (16-bit ADC) reply only
+
+    """
+    SHUTDOWN = [0x7F, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+    STM_NEUTRAL = [0x7F, 0xFF, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00]
+    
+
+    def __init__(
+        self,
+        bus: can.BusABC,
+        motor_id: int = 5,
+        post_command_delay_s = 0.003, # Required due to slow CAN response
+        max_rpm = 600, 
+        min_rpm = -600,
+        limit_rpm_upper = 100,
+        limit_rpm_lower = -100,
+        **kwargs,
+    ):
+        super().__init__(
+            bus,
+            motor_id,
+            mit_id=0x000 + motor_id, # MIT-style packed frames to this addr
+            **kwargs,
+        )
+        self.rx_id = 0x300 + motor_id # Receive msg from motor from this addr
+        self.post_command_delay_s = post_command_delay_s # Delay for reply
+        self.max_rpm = max_rpm
+        self.min_rpm = min_rpm
+        self.limit_rpm_lower = limit_rpm_lower
+        self.limit_rpm_upper = limit_rpm_upper
+
+
+    def _send_special(self, data: list[int]):
+        self.bus.send(
+            can.Message(
+                arbitration_id=self.mit_id,
+                data=data,
+                is_extended_id=False,
+            )
+        )
+
+    
+# Internal method to build an MIT-style CAN frame
+
+    def _pack_stm_frame(self, *, speed: float, enable: int) -> list[int]:
+        speed = clamp(speed, self.limit_rpm_lower, self.limit_rpm_upper)
+
+        max_rpm = max(abs(self.limit_rpm_lower), abs(self.limit_rpm_upper))
+        raw = int(0x7FFF + (speed / max_rpm) * 0x7FFF)
+        raw = clamp(raw, 0x0000, 0xFFFF)
+
+        return [
+            (raw >> 8) & 0xFF,
+            raw & 0xFF,
+            enable & 0x01,
+            0, 0, 0, 0, 0
+        ]
+
+# Raw desired output using float values
+    def _send_stm_raw(
+        self,
+        *, # Function calls require keyword explicity in parameters. 
+        speed: float, # Position
+        enable: int
+    ):
+        # Use method to build STM frame
+        data = self._pack_stm_frame( 
+            speed=speed,
+            enable=enable
+        )
+        self.bus.send(
+            can.Message( # python-can standard method
+                arbitration_id=self.mit_id, # e.g. 0x003 for Cube, 0x403 for RMD
+                data=data, # List of 8 bytes from _pack_mit_frame return
+                is_extended_id=False,
+            )
+        )
+
+        # Add delay for RMD motor reply
+        delay_s = getattr(self, "post_command_delay_s", 0.0)
+        if delay_s > 0.0:
+            time.sleep(delay_s)
+
+    # Disable output using Own command 0x7FFF000000000000.
+    def shutdown(self):
+        self._send_special(self.SHUTDOWN)
+        self._enabled = False
+        time.sleep(0.1)
+
+    # Neutral MIT output using MIT command 0x7FFF010000000000.
+    def neutral(self):
+        self._send_mit_special(self.STM_NEUTRAL)
+        self._enabled = False
+
+    def query_zero_feedback_rpm(self, timeout: float = 0.2) -> float:
+        """
+        Read one STM feedback frame and return speed in RPM.
+        Feedback ID is 0x300 + motor_id.
+        DATA[0:3] contains the packed 16-bit speed value using 0x7fff as zero.
+        """
+        # Ask for a feedback frame by sending a passive zero-gain MIT frame.
+        # self._send_mit_raw(p_des=0.0, v_des=0.0, kp=0.0, kd=0.0, t_ff=0.0)
+        self._send_mit_special(self.STM_NEUTRAL)
+
+        # Block until message is received from motor (time-out of 0.2 seconds).
+        start = time.time()
+        while time.time() - start < timeout:
+            msg = self.bus.recv(timeout=timeout) # Receive msg from python-can
+            if msg is None:
+                continue # Restart the loop
+            if msg.arbitration_id != self.rx_id: # IDs must match
+                continue
+            if len(msg.data) < 8: # Eight bytes in a list
+                continue
+            raw = (msg.data[0] << 8) | msg.data[1]
+            max_rpm = max(abs(self.limit_rpm_lower), abs(self.limit_rpm_upper))
+            current_rpm = ((raw - 0x7FFF) / 0x7FFF) * max_rpm
+            return current_rpm
+
+        raise TimeoutError("No STM32 ESC CAN feedback frame received")
+    
+    def poll_feedback_stm(self):
+        msg = self.bus.recv(timeout=0.0)  # non-blocking
+
+        if msg is None or msg.arbitration_id != self.rx_id or len(msg.data) < 8:
+            return None
+
+        raw_speed = (msg.data[0] << 8) | msg.data[1]
+
+        # max_rpm needs to match setting within STM main.c ' CAN_MAX_RPM
+        rpm = ((raw_speed - 0x7FFF) / 0x7FFF) * self.max_rpm
+
+        # Voltage reading in message is x10. i.e. 203 is 20.3V
+        voltage_x10 = (msg.data[2] << 8) | msg.data[3]
+        voltage = voltage_x10 / 10.0
+
+        # Duty cycle, direction, and state from 6-step
+        duty = (msg.data[4] << 8) | msg.data[5]
+        direction = msg.data[6]
+        state = msg.data[7]
+
+        return rpm, voltage, duty, direction, state
+
+    # def startup(self, *, use_current_position_as_zero: bool = True) -> None:
+    def startup(self):
+        """
+        Basic function to match prototypes of other motors
+        """
+        current_rpm = self.query_zero_feedback_rpm() # Neutral with reply
+        print(f"{self.mit_id} is alive with {current_rpm} rpm at startup.")
+        time.sleep(0.1)
+
+    # Call send_rpm(target_rpm) from to operate the motor.
+    def send_rpm(self, target_rpm: float):
+        now = time.monotonic()
+
+        target_rpm = clamp(
+            target_rpm,
+            self.limit_rpm_lower,
+            self.limit_rpm_upper
+        )
+
+        self._send_stm_raw(speed=target_rpm, enable=0x01)
+
