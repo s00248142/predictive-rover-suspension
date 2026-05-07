@@ -104,6 +104,9 @@ class TofSensor:
         self.change_addr()
         self.results = ResultsData()
         self.init()
+        self.accumulate = 0 # Accumulate samples before calibrating offset
+        self.offset = 0 # To be calibrated after rover settles at height
+        self.cal_distance = 0
 
     def xshut_on(self):
         spi = spidev.SpiDev()
@@ -202,8 +205,8 @@ class TofSensor:
         latest_sigma = self.results.sigma_mm
         latest_status = self.results.range_status
         
-        # Uncomment to debug
-        # print(f"device=0x{self.addr.value:02x}",
+        
+        # print(f"device=0x{self.addr.value:02x}", # Uncomment to debug
         #     f"distance={latest_distance} mm, "
         #     f"sigma={latest_sigma} mm, "
         #     f"status={latest_status}"

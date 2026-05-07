@@ -40,8 +40,15 @@ from mit_motors import RMDL5015, CubeMarsGL60II, STM32_ESC # Custom module
 import joystick as joy
 from helpers import clamp
 import steer_vel_mixer
+import angle_height_calc
 
-exit_flag = False
+exit_flag = False # Used for setting flag from within nested while loops.
+
+# Used to sequentially read each ToF sensor instead of polling all. 
+# Polling all together was causing performance issues.
+tof_index = 0
+TOF_PERIOD = 0.005  # 200 Hz
+last_tof_poll = 0.0
 
 # ******************************************************************************
 # Initialise hand controller
@@ -122,11 +129,22 @@ filtered_pitch_deg = 0.0
 filtered_roll_deg = 0.0
 ANGLE_ALPHA = 0.15
 
-# Individual leg trim
-FL_TRIM_DEG = 0.0
-FR_TRIM_DEG = 0.0
-REAR_TRIM_DEG = 0.0
-TRIM_RATE = 1.0 # Default to 0.2 for slow safe response.
+# Individual leg trim from time-of-flight sensors
+FL_TOF_TRIM_DEG = 0.0 
+FR_TOF_TRIM_DEG = 0.0
+REAR_TOF_TRIM_DEG = 0.0
+TOF_TRIM_RATE = 0.8
+TRIM_CLAMP_UPPER = 35
+TRIM_CLAMP_LOWER = 5
+
+TOF_TRIM_ENABLED = False
+
+
+# Individual leg trim from joystick
+FL_MANUAL_TRIM_DEG = 0.0 
+FR_MANUAL_TRIM_DEG = 0.0
+REAR_MANUAL_TRIM_DEG = 0.0
+MANUAL_TRIM_RATE = 1.0 # Default to 0.2 for slow safe response.
 
 # ******************************************************************************
 # Attitude Targets
@@ -137,8 +155,8 @@ SUS_STANDBY_DEG = -90.0 # Verticle mode to reduce electrical current demand
 FLUIDITY = 0.1
 
 # Set Target Limits (joystick or future payload protection ability)
-TARGET_PITCH_MIN_DEG = -20.0
-TARGET_PITCH_MAX_DEG = 20.0
+TARGET_PITCH_MIN_DEG = -60
+TARGET_PITCH_MAX_DEG = 25
 
 TARGET_ROLL_MIN_DEG = -20.0
 TARGET_ROLL_MAX_DEG = 20.0
@@ -284,6 +302,7 @@ time.sleep(0.05)
 try:
     # Frequency of loops below
     dt = 0.01 # 0.01 is 100 Hz
+    last_tof_poll = time.monotonic() # Separate timer for TOF sensors
     
     # Triangle button on PS5 controller starts the rover.
     print("Ready!\nPress TRIANGLE to start rover...")
@@ -310,7 +329,7 @@ try:
 
     # Stand up the robot
     count = 0
-    while count < 100:
+    while count < 200: # Needs 200 or ToF sensors won't cal properly.
         
         left_sus_motor.move(SUS_READY_DEG) # SUS_READY_DEG is normally -70
         right_sus_motor.move(SUS_READY_DEG)
@@ -319,6 +338,47 @@ try:
 
         time.sleep(dt)
         count = count + 1
+
+    # Calibrate ToF sensors
+    time.sleep(2) # Wait 2 sec to settle movement
+    # Warm up sensors first
+    count = 0
+    while count < 10: # Poll 10 times for average
+        for sensor in tof_sensors:
+            sensor.poll_once()
+        time.sleep(0.1)
+        count = count + 1
+
+    # Calibrate from warmed up sensors.
+    count = 0
+    while count < 10: # Poll 10 times for average
+        for sensor in tof_sensors:
+            sensor.poll_once()
+            print(
+                f"raw: {sensor.results.distance_mm:.1f}",
+                f"raw avg: {sensor.accumulate:.1f}, "
+                f"offset: {sensor.offset:.1f}, "
+                f"cal: {sensor.cal_distance:.1f}"
+            )
+            sensor.accumulate=sensor.accumulate + sensor.results.distance_mm
+        time.sleep(0.1)
+        count = count + 1
+    # Average distance measurement and set the offset for each sensor
+    for sensor in tof_sensors:
+        sensor.accumulate = sensor.accumulate/10 
+        sensor.offset = angle_height_calc.tof_offset(sensor.accumulate)
+        # Initiate first height before main loop
+        sensor.cal_distance = sensor.accumulate- sensor.offset
+
+        # print(
+        #     f"raw avg: {sensor.accumulate:.1f}, "
+        #     f"offset: {sensor.offset:.1f}, "
+        #     f"cal: {sensor.cal_distance:.1f}"
+        # )
+        sensor.accumulate = 0
+
+
+
 
 # ******************************************************************************
 #                         --------------------
@@ -329,10 +389,62 @@ try:
 
         # **********************************************************************
         # Collect time-of-flight sensor data
+        # Note: Polling all every time slows down loop significantly
         # **********************************************************************
-        for sensor in tof_sensors:
-            sensor.poll_once()
+        now = time.monotonic()
 
+        if now - last_tof_poll >= TOF_PERIOD:
+
+            # for sensor in tof_sensors: # Uncomment to poll all at once
+            #     sensor.poll_once()
+
+            tof_sensors[tof_index].poll_once() # Uncomment to poll sequentially
+            tof_sensors[tof_index].cal_distance = (
+                tof_sensors[tof_index].results.distance_mm
+                - tof_sensors[tof_index].offset)
+            # Change index for next sensor on next cycle.
+            tof_index = (tof_index + 1) % len(tof_sensors)
+            last_tof_poll = now
+
+        # **********************************************************************
+        # Use ToF to control trim sensor
+        # ToF 1 for left
+        # ToF 2 for right
+        # Tof 3 for rear
+        # Tof 4 for centre but unused
+        # **********************************************************************
+        if TOF_TRIM_ENABLED:  # Check TOF_TRIM_ENABLED flag 
+            FL_TRIM_TARGET_DEG = (
+                angle_height_calc.tof_to_sus_angle(tof_sensors[0].cal_distance)
+                - SUS_READY_DEG
+            )
+            FL_TOF_TRIM_DEG += TOF_TRIM_RATE * (
+                FL_TRIM_TARGET_DEG - FL_TOF_TRIM_DEG
+            )
+            FL_TOF_TRIM_DEG = clamp(FL_TOF_TRIM_DEG,
+                                    TRIM_CLAMP_LOWER, TRIM_CLAMP_UPPER)
+
+
+            # FR_TRIM_TARGET_DEG = (
+            #     angle_height_calc.tof_to_sus_angle(tof_sensors[1].cal_distance)
+            #     - SUS_READY_DEG
+            # )
+            # FR_TOF_TRIM_DEG += TOF_TRIM_RATE * (
+            #     FR_TRIM_TARGET_DEG - FR_TOF_TRIM_DEG
+            # )
+
+            # REAR_TRIM_TARGET_DEG = (
+            #     angle_height_calc.tof_to_sus_angle(tof_sensors[2].cal_distance)
+            #     - SUS_READY_DEG
+            # )
+            # REAR_TOF_TRIM_DEG += TOF_TRIM_RATE * (
+            #     REAR_TRIM_TARGET_DEG - REAR_TOF_TRIM_DEG
+            # )
+
+        else:
+            FL_TOF_TRIM_DEG = 0.0
+            FR_TOF_TRIM_DEG = 0.0
+            REAR_TOF_TRIM_DEG = 0.0
 
         # **********************************************************************
         # Collect IMU data
@@ -394,34 +506,35 @@ try:
         # Manual requests for trim control of individual legs
         if js.get_hat(joy.HAT_DPAD) == (-1, 0):
             if js.get_button(joy.BTN_OPTIONS):
-                FL_TRIM_DEG -= TRIM_RATE  # extend/lower FL
+                FL_MANUAL_TRIM_DEG -= MANUAL_TRIM_RATE  # extend/lower FL
             else:
-                FL_TRIM_DEG += TRIM_RATE # retract/raise FL
+                FL_MANUAL_TRIM_DEG += MANUAL_TRIM_RATE # retract/raise FL
 
         if js.get_hat(joy.HAT_DPAD) == (1, 0):
             if js.get_button(joy.BTN_OPTIONS):
-                FR_TRIM_DEG -= TRIM_RATE   # extend/lower FR
+                FR_MANUAL_TRIM_DEG -= MANUAL_TRIM_RATE   # extend/lower FR
             else:
-                FR_TRIM_DEG += TRIM_RATE  # retract/raise FR
+                FR_MANUAL_TRIM_DEG += MANUAL_TRIM_RATE  # retract/raise FR
 
         if js.get_hat(joy.HAT_DPAD) == (0, -1):
             if js.get_button(joy.BTN_OPTIONS):
-                REAR_TRIM_DEG -= TRIM_RATE # extend/lower REAR
+                REAR_MANUAL_TRIM_DEG -= MANUAL_TRIM_RATE # extend/lower REAR
             else:
-                REAR_TRIM_DEG += TRIM_RATE # retract/raise REAR
+                REAR_MANUAL_TRIM_DEG += MANUAL_TRIM_RATE # retract/raise REAR
 
         # Reset trim values
         if js.get_hat(joy.HAT_DPAD) == (0, 1):
+            # Press UP + Options to gradually rise
             if js.get_button(joy.BTN_OPTIONS): # Low current vertical stance
-                FL_TRIM_DEG = SUS_STANDBY_DEG - SUS_READY_DEG
-                FR_TRIM_DEG = SUS_STANDBY_DEG - SUS_READY_DEG
-                REAR_TRIM_DEG = SUS_STANDBY_DEG - SUS_READY_DEG
+                FL_MANUAL_TRIM_DEG = SUS_STANDBY_DEG - SUS_READY_DEG
+                FR_MANUAL_TRIM_DEG = SUS_STANDBY_DEG - SUS_READY_DEG
+                REAR_MANUAL_TRIM_DEG = SUS_STANDBY_DEG - SUS_READY_DEG
+            # Just press UP to immediately return to normal (-70 degrees)
             else:
-                FL_TRIM_DEG = 0.0
-                FR_TRIM_DEG = 0.0
-                REAR_TRIM_DEG = 0.0
+                FL_MANUAL_TRIM_DEG = 0.0
+                FR_MANUAL_TRIM_DEG = 0.0
+                REAR_MANUAL_TRIM_DEG = 0.0
 
-        
 
         # Check for lie down requests
         if js.get_button(joy.BTN_CROSS) == 1:
@@ -445,6 +558,14 @@ try:
                     break
 
                 time.sleep(dt)
+
+        
+        # Toggle for TOF_TRIM_ENABLE requests
+        if js.get_button(joy.BTN_R1) == 1:
+            if TOF_TRIM_ENABLED:
+                TOF_TRIM_ENABLED = False
+            else:
+                TOF_TRIM_ENABLED = True
 
         # Check for EXIT or MODE requests
         if js.get_button(joy.BTN_CREATE) == 1:
@@ -509,17 +630,14 @@ try:
         #     f"Err P/R: {pitch_error:6.2f}, {roll_error:6.2f} | "
         #     f"Cmd P/R: {pitch_cmd:6.2f}, {roll_cmd:6.2f}"
         #     )
-
-
-        # Only uncomment to debug. Slows loop rate.
-        # print(
-        #     f"Trim FL/FR/R: {FL_TRIM_DEG:6.2f}, "
-        #     f"{FR_TRIM_DEG:6.2f}, {REAR_TRIM_DEG:6.2f}"
-        # )
-
-        front_left_cmd = SUS_READY_DEG + targets["front_left"] + FL_TRIM_DEG
-        front_right_cmd = SUS_READY_DEG + targets["front_right"] + FR_TRIM_DEG
-        rear_cmd = SUS_READY_DEG + targets["rear"] + REAR_TRIM_DEG
+            
+        # Final targets from control loop.
+        front_left_cmd = (SUS_READY_DEG + targets["front_left"] 
+                          + FL_TOF_TRIM_DEG + FL_MANUAL_TRIM_DEG)
+        front_right_cmd = (SUS_READY_DEG + targets["front_right"]
+                           + FR_TOF_TRIM_DEG + FR_MANUAL_TRIM_DEG)
+        rear_cmd = (SUS_READY_DEG + targets["rear"]
+                    + REAR_TOF_TRIM_DEG + REAR_MANUAL_TRIM_DEG)
 
 
         # **********************************************************************
@@ -533,6 +651,15 @@ try:
         # left_wheel_motor.send_rpm(left_target_speed)
         # right_wheel_motor.send_rpm(right_target_speed)
         # rear_wheel_motor.send_rpm(rear_target_speed)
+
+        print(
+            f"ToF cal: {tof_sensors[0].cal_distance:.1f}, "
+            f"{tof_sensors[1].cal_distance:.1f}, "
+            f"{tof_sensors[2].cal_distance:.1f} | "
+            f"Trim: {FL_TOF_TRIM_DEG:.1f}, "
+            f"{FR_TOF_TRIM_DEG:.1f}, "
+            f"{REAR_TOF_TRIM_DEG:.1f}"
+        )
 
         time.sleep(dt)
 
