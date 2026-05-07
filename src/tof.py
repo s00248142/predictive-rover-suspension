@@ -1,3 +1,19 @@
+'''
+********************************************************************************
+* File Name: tof.py
+* Description: This file has three purposes:
+*   1.  Bind functions in the VL53L4CD driver to Python through 'ctypes' and 
+*       shared library that was compiled using platform.c
+*   2.  Provide functions for polling ToF sensors 
+*       and resetting XSHUT shift register, disabling the ToF sensors.
+*   3.  Creates a class for creating sensor objects to access their registers
+*       and, ultimately, their time-of-flight data, especially distance
+*       and sigma.
+* Programmer: Alan Ryan (s00248142)
+* Date: 06/05/2025
+* Version: 1.0
+********************************************************************************
+'''
 
 import ctypes as c # For accessing VL53L4CD driver through shared libary
 import time
@@ -74,15 +90,13 @@ def poll_tof_sensors(sensors):
     for sensor in sensors:
         sensor.poll_once()
 
-
-
 # ToF Sensor class for VL53L4CD
 class TofSensor:
     def __init__(self, tof_idx=0):
         self.tof_idx = tof_idx
         self.default_addr = 0x29
         self.addr = 0x00
-        self.expected_sensor_id = 0xebaa
+        self.expected_sensor_id = 0xebaa # All VL53L4CD sensors have this id
         self.timing_budget_ms = 20
         self.intermeasurement_ms = 0
         self.ready = c.c_uint8(0) # Initialise ready.value as 0
@@ -181,22 +195,19 @@ class TofSensor:
         status = lib.VL53L4CD_ClearInterrupt(self.addr)
         if status != 0:
             raise RuntimeError(f"ClearInterrupt failed: {status}")
-        
-        # Print results
-        # print(f"distance = {results.distance_mm} mm, "
-        #         f"sigma = {results.sigma_mm} mm")
 
         # Store results
         latest_distance = self.results.distance_mm
         latest_sigma = self.results.sigma_mm
         latest_status = self.results.range_status
         
+        # Uncomment to debug
+        # print(f"device=0x{self.addr.value:02x}",
+        #     f"distance={latest_distance} mm, "
+        #     f"sigma={latest_sigma} mm, "
+        #     f"status={latest_status}"
+        # )
 
-        print(f"device=0x{self.addr.value:02x}",
-            f"distance={latest_distance} mm, "
-            f"sigma={latest_sigma} mm, "
-            f"status={latest_status}"
-        )
 
 
 
@@ -225,3 +236,6 @@ class TofSensor:
     #             print(f"Timeout while turning on sensor {self.tof_idx}.")
 
     #     ser.close()
+
+    
+# ******************************* End of file **********************************

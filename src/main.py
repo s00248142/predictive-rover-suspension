@@ -286,7 +286,7 @@ time.sleep(0.05)
 
 try:
     # Frequency of loops below
-    dt = 0.01 # 0.01 is 100 Hz
+    dt = 0.5 # 0.01 is 100 Hz
     
     # Triangle button on PS5 controller starts the rover.
     print("Ready!\nPress TRIANGLE to start rover...")
@@ -331,7 +331,7 @@ try:
     while True:
 
         # **********************************************************************
-        # Collect IMU data
+        # Collect time-of-flight sensor data
         # **********************************************************************
         tof.poll_tof_sensors(tof_sensors)
 
@@ -499,7 +499,6 @@ try:
         rear_cmd = SUS_READY_DEG + targets["rear"] + REAR_TRIM_DEG
 
 
-
         # **********************************************************************
         # Request Motor Movement
         # **********************************************************************
@@ -540,3 +539,9 @@ finally:
     # left_wheel_motor.shutdown()
     # right_wheel_motor.shutdown()
     # rear_wheel_motor.shutdown()
+
+    # Turn off all XSHUT signals to ToF sensors to allow re-run
+    tof.xshut_reset()
+
+
+# ******************************* End of file **********************************

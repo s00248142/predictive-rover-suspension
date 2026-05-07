@@ -1,4 +1,18 @@
+
+'''
+********************************************************************************
+* File Name: xshut_startup.py
+* Description: Ensure each shift register for contolling XSHUT is low at init. 
+*   Without this startup function the 74HC595 will turn on all ToF sensors
+*   at the same time, making address changes impossible.
+* Programmer: Alan Ryan (s00248142)
+* Date: 06/04/2025
+* Version: 1.0
+********************************************************************************
+'''
 # /home/user/code/predictive-rover-suspension/tools/xshut_startup.py
+
+
 import time
 import spidev
 

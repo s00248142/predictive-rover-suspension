@@ -1,3 +1,20 @@
+'''
+********************************************************************************
+* File Name: mit_motors.py
+* Description: This file has three purposes:
+*   1.  Bind functions in the VL53L4CD driver to Python through 'ctypes' and 
+*       shared library that was compiled using platform.c
+*   2.  Provide functions for polling ToF sensors 
+*       and resetting XSHUT shift register, disabling the ToF sensors.
+*   3.  Creates a class for creating sensor objects to access their registers
+*       and, ultimately, their time-of-flight data, especially distance
+*       and sigma.
+* Programmer: Alan Ryan (s00248142)
+* Date: 06/05/2025
+* Version: 1.0
+********************************************************************************
+'''
+
 """
 mit_motors.py
 
@@ -22,6 +39,7 @@ import math
 # from typing import Optional
 import time
 import can
+
 
 
 def clamp(value: float, low: float, high: float) -> float:

@@ -6,8 +6,14 @@ import can # python-can
 import pygame
 from bmi270.BMI270 import *
 
-from mit_motors import RMDL5015, CubeMarsGL60II, STM32_ESC
-import joystick as joy
+import sys
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
+from src.mit_motors import STM32_ESC
+
+from src import joystick as joy
 
 
 def deadzone(value: float, threshold: float = 0.08) -> float:

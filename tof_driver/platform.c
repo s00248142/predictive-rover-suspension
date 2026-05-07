@@ -1,18 +1,14 @@
-/**
-  *
-  * Copyright (c) 2023 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
-
-/* Modification of code: */
-/* Programmer: Alan Ryan */
-
+/*******************************************************************************
+* File Name: platform.c
+* Description:
+*	API traslation to the Linux platform for the VL53L4CD sensor
+* 	Based on ST's PDF guide to their 'Ultra Lite Driver' stored in this folder.
+*	Compile using bash command identified in README_tof_driver.md
+*	Output is a shared libary for Python to bind with using 'ctypes' module.
+* Programmer: Alan Ryan (s00248142)
+* Date: 06/05/2025
+* Version: 1.0
+*******************************************************************************/
 
 #include "platform.h"
 
@@ -54,7 +50,7 @@ uint8_t VL53L4CD_RdDWord(Dev_t dev, uint16_t RegisterAdress, uint32_t *value)
 {
 	uint8_t status = 255;
 
-/*********** Added: Body of VL53L4CD_RdDWord to connect with Linux. ************/
+/*********** Added: Body of VL53L4CD_RdDWord to connect with Linux ************/
 	
 	/* Open I2C bus and ensure it is open, using helper function. */	
 	if (ensure_i2c_open() != 0) {

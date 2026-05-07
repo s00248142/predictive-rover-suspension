@@ -1,3 +1,13 @@
+'''
+********************************************************************************
+* File Name: helpers.py
+* Description: Generic helper functions
+* Programmer: Alan Ryan (s00248142)
+* Date: 06/05/2025
+* Version: 1.0
+********************************************************************************
+'''
+
 import subprocess # Linux shell commands (standard library)
 import can # python-can
 
@@ -41,6 +51,7 @@ def clamp(value, low, high):
 #         run_cmd(["sudo", "ip", "link", "set", f"can{self.channel}", "down"])
 #         print(f"can{self.channel} stopped")
 
+# ******************************* End of file **********************************
 
 
 

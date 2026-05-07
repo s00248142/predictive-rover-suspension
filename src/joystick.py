@@ -1,6 +1,16 @@
-# Masp Based on website below, but many were wrong:
-# https://www.pygame.org/docs/ref/joystick.html for PS5 controller
-# Use pygame_test_inputs.py in /tools/ for real relationships
+'''
+********************************************************************************
+* File Name: joystick.py
+* Description: Axis conversion and normalisation functions. 
+*   Playstation 5 joystick mapping.
+*   Maps Based on website below, but many were wrong:
+*   https://www.pygame.org/docs/ref/joystick.html for PS5 controller
+*   Use pygame_test_inputs.py in /tools/ for real relationships
+* Programmer: Alan Ryan (s00248142)
+* Date: 06/05/2025
+* Version: 5.0
+********************************************************************************
+'''
 
 # Analogue axes
 AXIS_L_X = 0 # left/right
@@ -32,11 +42,12 @@ HAT_DPAD = 0
 def norm_trigger(val):
     return (val + 1.0) / 2.0
 
+# Combine two axes into one (right and left analogue triggers to -RPM <> +RPM)
 def triggers_to_axis(fwd_raw, rev_raw):
     fwd = norm_trigger(fwd_raw)
     rev = norm_trigger(rev_raw)
     axis = fwd - rev
     return axis
 
-
+# ******************************* End of file **********************************
 
