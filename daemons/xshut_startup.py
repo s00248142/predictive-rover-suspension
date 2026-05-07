@@ -2,7 +2,9 @@
 '''
 ********************************************************************************
 * File Name: xshut_startup.py
-* Description: Ensure each shift register for contolling XSHUT is low at init. 
+* Description: 
+*   Used by xshut_startup.service Linux startup service.
+*   Ensure each shift register for contolling XSHUT is low at init. 
 *   Without this startup function the 74HC595 will turn on all ToF sensors
 *   at the same time, making address changes impossible.
 * Programmer: Alan Ryan (s00248142)

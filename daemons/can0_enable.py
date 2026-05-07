@@ -1,9 +1,14 @@
-# from pathlib import Path
-# import sys
-
-# PROJECT_ROOT = Path(__file__).resolve().parents[1]
-# sys.path.insert(0, str(PROJECT_ROOT))
-# from src.helpers import CanBus
+'''
+********************************************************************************
+* File Name: can0_enable.py
+* Description: Used by Linux startup service: can0_enable.service
+*   This allows system to start with GPIO for can0 enable, reducing complexity
+*   of main application.
+* Programmer: Alan Ryan (s00248142)
+* Date: 06/05/2025
+* Version: 1.0
+********************************************************************************
+'''
 
 from daemon_helpers import CanBus
 import gpiod

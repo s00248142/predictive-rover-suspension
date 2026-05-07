@@ -1,3 +1,15 @@
+'''
+********************************************************************************
+* File Name: daemon_helpers.py
+* Description: 
+*   Used internally by xshut and can_enable startup services to be able to send 
+*   shell commands in Linux
+* Programmer: Alan Ryan (s00248142)
+* Date: 06/05/2025
+* Version: 1.0
+********************************************************************************
+'''
+
 import subprocess # Linux shell commands (standard library)
 import can # python-can
 
