@@ -285,14 +285,14 @@ time.sleep(0.05)
 steering_motor.startup()
 time.sleep(0.05)
 
-# rear_wheel_motor.startup()
-# time.sleep(0.1)
-
 # left_wheel_motor.startup()
 # time.sleep(0.05)
 
 # right_wheel_motor.startup()
 # time.sleep(0.05)
+
+# rear_wheel_motor.startup()
+# time.sleep(0.1)
 
 
 # ******************************************************************************
@@ -590,12 +590,13 @@ try:
             TARGET_ROLL_MAX_DEG,
         )
 
-        # rear_target_speed= steer_vel_mixer.axis_to_rpm(axis, 
-        #                                     rear_wheel_motor.limit_rpm_upper)
+
         # left_target_speed= steer_vel_mixer.axis_to_rpm(axis, 
         #                                     left_wheel_motor.limit_rpm_upper)
         # right_target_speed= steer_vel_mixer.axis_to_rpm(axis, 
         #                                     right_wheel_motor.limit_rpm_upper)
+        # rear_target_speed= steer_vel_mixer.axis_to_rpm(axis, 
+        #                                     rear_wheel_motor.limit_rpm_upper)
 
         # **********************************************************************
         # Proportional and Differtial Control
