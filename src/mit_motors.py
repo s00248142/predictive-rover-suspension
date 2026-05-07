@@ -1,42 +1,29 @@
 '''
 ********************************************************************************
 * File Name: mit_motors.py
-* Description: This file has three purposes:
-*   1.  Bind functions in the VL53L4CD driver to Python through 'ctypes' and 
-*       shared library that was compiled using platform.c
-*   2.  Provide functions for polling ToF sensors 
-*       and resetting XSHUT shift register, disabling the ToF sensors.
-*   3.  Creates a class for creating sensor objects to access their registers
-*       and, ultimately, their time-of-flight data, especially distance
-*       and sigma.
+* Description: The purpose of this file is to use a shared MITMotor base class
+* for CAN-based motor controller that can accept a similar style of CAN packed 
+* frame, e.g. MIT_NEUTRAL = [0x7F, 0xFF, 0x7F, 0xF0, 0x00, 0x00, 0x07, 0xFF]
+* The frame is divided left to right as:
+*   - Position (16-bit where 0x7FFF is centre-aligned zero)
+*   - Velocity (12-bit where 0x7FF is centre-aligned zero)
+*   - Kp (12-bit where 0x000 is unsigned zero)
+*   - Kp (12-bit where 0x000 is unsigned zero)
+*   - Torque (12-bit where 0x7FF is centre-aligned zero)
+* Note: Only either Position, Velocity, or Torque can be sent at any one time.
+* This project only uses position mode for suspension and steering.
+* The driving wheel motor are on a custom-programmed controller and only share 
+* some characteristics as the MIT-style frame but is still here as a sub class.
+* The wheel motor controllers also report the system voltage, for safe shutdown.
+*
 * Programmer: Alan Ryan (s00248142)
 * Date: 06/05/2025
 * Version: 1.0
 ********************************************************************************
 '''
 
-"""
-mit_motors.py
-
-Small MIT-style CAN motor helpers for position-only steering control.
-
-Design goals:
-- Command position only: p_des with v_des=0 and t_ff=0.
-- Treat turn-on / first commanded position as software zero.
-- Clamp commanded position to a configured sweep range.
-- Limit sudden jumps with a max per-command delta.
-- Allow motor-specific CAN IDs while sharing MIT frame packing.
-
-Units:
-- Public steering command: degrees from software zero.
-- Internal MIT command: radians.
-"""
-
-# from __future__ import annotations
-
 from dataclasses import dataclass
 import math
-# from typing import Optional
 import time
 import can
 
@@ -96,7 +83,7 @@ class MITMotor:
     def __init__(
         self,
         bus: can.BusABC, # For use with python-can
-        motor_id: int, # Use simple integer 1, 2 etc... not 0x001. RMD needs this
+        motor_id: int, # Use simple integer 1, 2 etc... not 0x01. RMD needs this
         *,
         mit_id: int, # Generate id based on motor-specific requirements
         direction: int = 1, # Change to -1 to flip direction.
@@ -204,14 +191,14 @@ class MITMotor:
         kd: float = None,
         limit_delta: bool = True,
     ) -> float:
-        """
+        '''
         Immediately command a position relative to software zero.
 
         Most high-rate apps should call move() instead, because move() adds
-        stateful smoothing toward the latest destination.
+        smoothing toward the latest destination.
 
         Returns the actual clamped/slew-limited command angle in degrees.
-        """
+        '''
         if not self._enabled:
             self._enabled = True
 
@@ -248,7 +235,7 @@ class MITMotor:
         kp: float = None,
         kd: float = None,
     ) -> float:
-        """
+        '''
         High-rate target-following command.
 
         Call this once per control-loop tick, e.g. at 100 Hz:
@@ -258,20 +245,22 @@ class MITMotor:
             0.0 = very direct / snappy
             1.0 = very fluid / muddy
 
-        The method internally filters the destination and also respects max_delta_deg.
+        The method internally filters the destination and also respects
+        max_delta_deg.
         Returns the actual command angle sent to the motor.
-        """
+        '''
         target_deg = clamp(target_deg, self.lower_deg, self.upper_deg)
         fluidity = clamp(fluidity, 0.0, 1.0)
 
         # One-pole target filter. Higher fluidity means slower response.
-        # At 100 Hz, these values are intentionally conservative for steering tests.
-        min_tau = 0.02   # snappy
-        max_tau = 0.45   # muddy/fluid
+        # At 100 Hz, these values are intentionally conservative.
+        min_tau = 0.02   # Fast
+        max_tau = 0.45   # Slow
         tau = min_tau + fluidity * (max_tau - min_tau)
         alpha = dt / (tau + dt)
 
-        self._filtered_target_deg += alpha * (target_deg - self._filtered_target_deg)
+        self._filtered_target_deg += alpha * (target_deg 
+                                              - self._filtered_target_deg)
         
         # time.sleep(0.005)
 
@@ -282,29 +271,19 @@ class MITMotor:
             limit_delta=True,
         )
 
-    # def centre(self, *, kp: Optional[float] = None, kd: Optional[float] = None) -> float:
-    #     """Command software zero, respecting max_delta_deg."""
-    #     return self.command_position_deg(0.0, kp=kp, kd=kd)
 
     def set_software_zero_rad(self, zero_rad: float):
-        """Set the MIT-frame position that should be treated as zero."""
+        '''Set the MIT-frame position that should be treated as zero.'''
         self._zero_rad = clamp(zero_rad, self.limits.p_min, self.limits.p_max)
         self._last_command_deg = 0.0
 
-    # # Send a zero-gain signal to fully relax the motor without shutting down.
-    # def emergency_neutral(self) -> None:
-    #     """
-    #     Send a zero-gain, zero-position MIT frame.
 
-    #     This does not necessarily disable the motor; subclasses should provide shutdown
-    #     where supported.
-    #     """
-    #     self._send_mit_raw(p_des=0.0, v_des=0.0, kp=0.0, kd=0.0, t_ff=0.0)
-    #     self._enabled = False
-
+#*******************************************************************************
 # Myactuator RMD-L5015 Subclass
+#*******************************************************************************
+
 class RMDL5015(MITMotor):
-    """
+    '''
     MYACTUATOR RMD-L5015 in CAN Motion Mode.
 
     Proprietary commands:
@@ -313,7 +292,7 @@ class RMDL5015(MITMotor):
     MIT mode (Motion mode):
     - 0x400 + ID command.
     - 0x500 + ID reply.
-    """
+    '''
     SHUTDOWN = [0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
     BRAKE_RELEASE = [0x77, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
     BRAKE_LOCK = [0x78, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
@@ -338,14 +317,7 @@ class RMDL5015(MITMotor):
         self.motion_rx_id = 0x500 + motor_id # MIT mode replies
         self.post_command_delay_s = post_command_delay_s # RMD delay for reply
 
-    # def _send_standard(self, data: list[int]) -> None:
-    #     self.bus.send(
-    #         can.Message(
-    #             arbitration_id=self.tx_id,
-    #             data=data,
-    #             is_extended_id=False,
-    #         )
-    #     )
+    # Directly send. Skip the frame packing function.
     def _send_special(self, data: list[int]):
         self.bus.send(
             can.Message(
@@ -372,12 +344,12 @@ class RMDL5015(MITMotor):
         self._send_special(self.BRAKE_RELEASE)
 
     def query_zero_feedback_position_rad(self, timeout: float = 0.2) -> float:
-        """
+        '''
         Read one RMD Motion Mode feedback frame and return position in radians.
         Feedback ID is 0x500 + motor_id. The first byte is motor ID, 
         then DATA[1:3] contains the packed 16-bit position value using the same 
         -12.5..+12.5 rad range.
-        """
+        '''
         # Ask for a feedback frame by sending a passive zero-gain MIT frame.
         # self._send_mit_raw(p_des=0.0, v_des=0.0, kp=0.0, kd=0.0, t_ff=0.0)
         self._send_mit_special(self.MIT_NEUTRAL)
@@ -392,17 +364,16 @@ class RMDL5015(MITMotor):
                 continue
             if len(msg.data) < 8: # Eight bytes in a list
                 continue
-            # print(f"Reply from zero-gain command: {msg.data}") # Uncomment to debug
-            # input("Press Enter to continue...") # Uncomment to debug
+            # Extract position from frame
             p_int = (msg.data[1] << 8) | msg.data[2] # Combine two bytes as int
-            # print(f"\nRead position from CAN (16-bit int):{p_int}") # DB
-            # input("Press Enter to continue...") # Uncomment to debug
+            
+            # Calculate total pos and neg span
             span = self.limits.p_max - self.limits.p_min # -12 to +12 radians
-            # print(f"\nspan: {span}") # Uncomment to debug
-            # input("Press Enter to continue...") # Uncomment to debug
+            
+            # Apply span
             non_centre_aligned_pos = p_int * span / ((1 << 16) - 1)
-            # print(f"\nNon-centre position: {non_centre_aligned_pos}") # Uncomment to debug
-            # input("Press Enter to continue...") # Uncomment to debug
+
+            # Return actual position in radians
             current_pos = non_centre_aligned_pos + self.limits.p_min
             return current_pos
 
@@ -410,38 +381,32 @@ class RMDL5015(MITMotor):
 
     # def startup(self, *, use_current_position_as_zero: bool = True) -> None:
     def startup(self):
-        """
+        '''
         Safe startup sequence for RMD.
 
         If use_current_position_as_zero is True, command 0 deg means the physical
         position the motor was at during startup.
-        """
+        '''
+        # Start motor by giving shutdown command first
         self.shutdown()
         time.sleep(0.1)
 
-        # if use_current_position_as_zero:
-        #     current_rad = self.read_motion_feedback_position_rad()
-        #     self.set_software_zero_rad(current_rad)
-        # else:
-        #     self.set_software_zero_rad(0.0)
+        current_rad = self.query_zero_feedback_position_rad() # Actual pos rads
 
-        current_rad = self.query_zero_feedback_position_rad()
-        # print(f"current position: {current_rad} radians") # Uncomment to debug
-        # input("Press Enter to continue...") # Uncomment to debug
-
+        # Set startup position as zero for application
         self.set_software_zero_rad(current_rad)
 
-        # Send neutral before releasing brake
-        # self.neutral()
         time.sleep(0.1)
         
 
-        # self.arm_at_zero()
         self.brake_release()
 
+#*******************************************************************************
+# CubeMarsGL60II Subclass
+#*******************************************************************************
 
 class CubeMarsGL60II(MITMotor):
-    """
+    '''
     CubeMars GL60 II MIT-style motor.
 
     Known working manual sequence:
@@ -452,7 +417,7 @@ class CubeMarsGL60II(MITMotor):
     For CubeMars:
     - MIT command arbitration ID is the motor ID itself.
     - motor_id=0x03 sends motion commands to 0x003.
-    """
+    '''
 
     ENTER_MOTOR_MODE = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC]
     EXIT_MOTOR_MODE  = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFD]
@@ -473,10 +438,9 @@ class CubeMarsGL60II(MITMotor):
         )
         self.post_command_delay_s = post_command_delay_s # RMD delay for reply
 
-    def _send_special(
-        self,
-        data: list[int]
-    ):
+    
+    def _send_special(self, data: list[int]):
+        '''Send direct message. Skip packing the frame.'''
         self.bus.send(
             can.Message(
                 arbitration_id=self.mit_id,
@@ -485,15 +449,10 @@ class CubeMarsGL60II(MITMotor):
             )
         )
 
+
     def enter_motor_mode(self):
         self._send_special(self.ENTER_MOTOR_MODE)
 
-    # def exit_motor_mode(self) -> None:
-    #     self._send_special(
-    #         self.EXIT_MOTOR_MODE,
-    #         arbitration_id=self.reset_id,
-    #     )
-    #     self._enabled = False
     def exit_motor_mode(self):
         self._send_special(self.EXIT_MOTOR_MODE)
         self._enabled = False
@@ -510,29 +469,23 @@ class CubeMarsGL60II(MITMotor):
         use_current_position_as_zero: bool = False,
         set_zero: bool = True,
     ):
-        """
+        '''
         Startup for CubeMars GL60 II.
 
         set_zero=True sends the hardware zero command:
             0x003#FFFFFFFFFFFFFFFE
 
-        use_current_position_as_zero is accepted so the same app code can be used
-        for RMD and CubeMars, but for CubeMars this class currently does not read
-        feedback position before startup. So it behaves as software-zero = 0 rad.
+        use_current_position_as_zero is accepted. The same app code can be used
+        for RMD and CubeMars, but for CubeMars this class currently does not 
+        read feedback position before startup. So it behaves as 
+        software-zero = 0 rad.
 
         Typical safe use:
             startup(set_zero=False)
 
         Known manual zeroing use:
             startup(set_zero=True)
-        """
-
-        # Match your known first manual frame:
-            # cansend can0 001#FFFFFFFFFFFFFFFD
-            # self._send_special(
-            #     self.EXIT_MOTOR_MODE,
-            #     arbitration_id=self.reset_id,
-            # )
+        '''
 
         # cansend can0 003#FFFFFFFFFFFFFFFD
         self.exit_motor_mode()
@@ -552,9 +505,9 @@ class CubeMarsGL60II(MITMotor):
     def shutdown(self):
         self.exit_motor_mode()
 
-################################################################################
+#*******************************************************************************
 # STM32 B-G431B-ESC1 Subclass
-################################################################################
+#*******************************************************************************
 
 class STM32_ESC(MITMotor):
     """

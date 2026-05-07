@@ -157,6 +157,7 @@ class TofSensor:
         print("New I2C address:", hex(new_linux_addr))
         print(f"sensor_id: 0x{sensor_id.value:04x}")
 
+
     def init(self):
         # Initialise sensor
         status = lib.VL53L4CD_SensorInit(self.addr)

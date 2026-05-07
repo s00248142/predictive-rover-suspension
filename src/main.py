@@ -41,6 +41,8 @@ import joystick as joy
 from helpers import clamp
 import steer_vel_mixer
 
+exit_flag = False
+
 # ******************************************************************************
 # Initialise hand controller
 # ******************************************************************************
@@ -124,12 +126,7 @@ ANGLE_ALPHA = 0.15
 FL_TRIM_DEG = 0.0
 FR_TRIM_DEG = 0.0
 REAR_TRIM_DEG = 0.0
-
-# leg_trim = {
-#     "front_left": 0.0,
-#     "front_right": 0.0,
-#     "rear": 0.0,
-# }
+TRIM_RATE = 1.0 # Default to 0.2 for slow safe response.
 
 # ******************************************************************************
 # Attitude Targets
@@ -148,7 +145,7 @@ TARGET_ROLL_MAX_DEG = 20.0
 
 # PD Controller output limits
 CTRL_PITCH_MIN_DEG = -25.0
-CTRL_PITCH_MAX_DEG = 15.0
+CTRL_PITCH_MAX_DEG = 25.0
 
 CTRL_ROLL_MIN_DEG = -25.0
 CTRL_ROLL_MAX_DEG = 25.0
@@ -333,7 +330,8 @@ try:
         # **********************************************************************
         # Collect time-of-flight sensor data
         # **********************************************************************
-        tof.poll_tof_sensors(tof_sensors)
+        for sensor in tof_sensors:
+            sensor.poll_once()
 
 
         # **********************************************************************
@@ -396,21 +394,21 @@ try:
         # Manual requests for trim control of individual legs
         if js.get_hat(joy.HAT_DPAD) == (-1, 0):
             if js.get_button(joy.BTN_OPTIONS):
-                FL_TRIM_DEG -= 0.2  # extend/lower FL
+                FL_TRIM_DEG -= TRIM_RATE  # extend/lower FL
             else:
-                FL_TRIM_DEG += 0.2  # retract/raise FL
+                FL_TRIM_DEG += TRIM_RATE # retract/raise FL
 
         if js.get_hat(joy.HAT_DPAD) == (1, 0):
             if js.get_button(joy.BTN_OPTIONS):
-                FR_TRIM_DEG -= 0.2   # extend/lower FR
+                FR_TRIM_DEG -= TRIM_RATE   # extend/lower FR
             else:
-                FR_TRIM_DEG += 0.2   # retract/raise FR
+                FR_TRIM_DEG += TRIM_RATE  # retract/raise FR
 
         if js.get_hat(joy.HAT_DPAD) == (0, -1):
             if js.get_button(joy.BTN_OPTIONS):
-                REAR_TRIM_DEG -= 0.2 # extend/lower REAR
+                REAR_TRIM_DEG -= TRIM_RATE # extend/lower REAR
             else:
-                REAR_TRIM_DEG += 0.2 # retract/raise REAR
+                REAR_TRIM_DEG += TRIM_RATE # retract/raise REAR
 
         # Reset trim values
         if js.get_hat(joy.HAT_DPAD) == (0, 1):
@@ -425,8 +423,33 @@ try:
 
         
 
-        # Check for EXIT or MODE requests
+        # Check for lie down requests
         if js.get_button(joy.BTN_CROSS) == 1:
+            while True:
+                pygame.event.get() # Collect joystick eventss
+                
+                # Lie down the robot
+                steering_motor.move(0)
+                left_sus_motor.move(0)
+                right_sus_motor.move(0)
+                rear_motor.move(0)
+                # left_wheel_motor.send_rpm(0)
+                # right_wheel_motor.send_rpm(0)
+                # rear_wheel_motor.send_rpm(0)
+
+                if js.get_button(joy.BTN_TRIANGLE) == 1:
+                    break
+                        # Check for EXIT or MODE requests
+                if js.get_button(joy.BTN_CREATE) == 1:
+                    exit_flag = True #  Set flag due to inner while loop.
+                    break
+
+                time.sleep(dt)
+
+        # Check for EXIT or MODE requests
+        if js.get_button(joy.BTN_CREATE) == 1:
+            break
+        if exit_flag is True:
             break
 
 
@@ -488,11 +511,11 @@ try:
         #     )
 
 
-
-        print(
-            f"Trim FL/FR/R: {FL_TRIM_DEG:6.2f}, "
-            f"{FR_TRIM_DEG:6.2f}, {REAR_TRIM_DEG:6.2f}"
-        )
+        # Only uncomment to debug. Slows loop rate.
+        # print(
+        #     f"Trim FL/FR/R: {FL_TRIM_DEG:6.2f}, "
+        #     f"{FR_TRIM_DEG:6.2f}, {REAR_TRIM_DEG:6.2f}"
+        # )
 
         front_left_cmd = SUS_READY_DEG + targets["front_left"] + FL_TRIM_DEG
         front_right_cmd = SUS_READY_DEG + targets["front_right"] + FR_TRIM_DEG
