@@ -1,5 +1,23 @@
-import numpy as np
+'''
+********************************************************************************
+* File Name: main.py
+* Description: Geometric representation of the suspension, wheel, and senors.
+*   All suspension motor, ToF sensor, and wheel groups were designed to have
+*   identical geometry, which means this module can be ustilised for all 
+*   rover limb reactions.
+*   Using the suspension centre as the origin (0,0) NumPy is used to calculate 
+*   the cartesian coordinates of the ToF sensor, its unit vector, and the 
+*   ideal ground detection distance (103.75 mm)
+*   Two functions are provided:
+*   1. tof_offset() to calibrate ToF aensors to their ideal geometry
+*   2. tof_to_sus_angle() to determine the require motor angle from Tof input
+* Programmer: Alan Ryan (s00248142)
+* Date: 06/05/2025
+* Version: 5.0
+********************************************************************************
+'''
 
+import numpy as np
 
 #*******************************************************************************
 # Define Physical Geometry
@@ -37,7 +55,7 @@ expected_tof_y = (ground_contact_y - tof_xy[1]) / tof_direction[1]
 
 print(expected_tof_y)
 
-# Function to return calibrated offset to object after settling perion in app
+# Function to return calibrated offset to object after settling period in app
 def tof_offset(measured_tof):
     offset = measured_tof - expected_tof_y
     return offset
@@ -54,33 +72,4 @@ def tof_to_sus_angle(distance):
     return angle_deg
 
 
-
-
-# Example input
-# example_tof_distance = 90
-
-
-
-
-# def suspension_ang_deg(tof_distance):
-
-
-
-
-
-
-
-
-    
-
-#     tof_delta = tof_distance - tof_baseline
-
-
-
-
-#     ground_point = tof_xy + tof_distance * tof_direction
-
-
-# new_suspension_angle = suspension_ang_deg(example_tof_distance)
-
-# print(new_suspension_angle)
+# ******************************* End of file **********************************
