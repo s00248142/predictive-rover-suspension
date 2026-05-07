@@ -286,7 +286,7 @@ time.sleep(0.05)
 
 try:
     # Frequency of loops below
-    dt = 0.5 # 0.01 is 100 Hz
+    dt = 0.01 # 0.01 is 100 Hz
     
     # Triangle button on PS5 controller starts the rover.
     print("Ready!\nPress TRIANGLE to start rover...")

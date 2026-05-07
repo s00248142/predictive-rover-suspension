@@ -40,8 +40,6 @@ import math
 import time
 import can
 
-
-
 def clamp(value: float, low: float, high: float) -> float:
     '''
     Clamp: Ensure that motor ojects can't be asked to go beyond the defined 
