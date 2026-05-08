@@ -50,17 +50,15 @@ tof_index = 0
 TOF_PERIOD = 0.005  # 200 Hz
 last_tof_poll = 0.0
 
-# ******************************************************************************
-# Initialise hand controller
-# ******************************************************************************
 
+# Mix degrees based on three-limbs
 def mix_body_degrees(pitch_deg, roll_deg, height_deg=0.0):
     return {
         "front_left":  height_deg + pitch_deg + roll_deg,
         "front_right": height_deg + pitch_deg - roll_deg,
         "rear":        height_deg - pitch_deg,
     }
-
+# Deadzone for PS5 controller
 def deadzone(value: float, threshold: float = 0.08) -> float:
     if abs(value) < threshold:
         return 0.0
@@ -74,10 +72,18 @@ def map_axis_to_asymmetric_angle(value, negative_limit, positive_limit):
     else:
         return value * abs(negative_limit)
 
+
+# ******************************************************************************
+# Deadband for PD control
+# ******************************************************************************
 def angle_deadband(value, threshold=0.5):
     if abs(value) < threshold:
         return 0.0
     return value
+
+# ******************************************************************************
+# Initialise hand controller
+# ******************************************************************************
 
 pygame.init()
 pygame.joystick.init()
@@ -602,21 +608,22 @@ try:
         # Proportional and Differtial Control
         # **********************************************************************
 
-        # pitch_error = target_pitch_deg - pitch_deg
-        # roll_error  = target_roll_deg  - roll_deg
 
+        # Error is target minus body angle deadband (ignores 0.5 degree errors)
         pitch_error = angle_deadband(target_pitch_deg - pitch_deg)
         roll_error  = angle_deadband(target_roll_deg - roll_deg)
 
-        # pitch_cmd = KP_PITCH * pitch_error
-        # roll_cmd = KP_ROLL * roll_error
-
+        # Proportional controller (kp pitch * error)
+        # Derivative controller (kd pitch * current rate)
+        # P term - D term
         pitch_cmd = (KP_PITCH * pitch_error) - (KD_PITCH * pitch_rate_dps)
         roll_cmd  = (KP_ROLL * roll_error) - (KD_ROLL * roll_rate_dps)
 
+        # Apply clamp
         pitch_cmd = clamp(pitch_cmd, CTRL_PITCH_MIN_DEG, CTRL_PITCH_MAX_DEG)
         roll_cmd = clamp(roll_cmd, CTRL_ROLL_MIN_DEG, CTRL_ROLL_MAX_DEG)
 
+        # First order lowpass filter
         filtered_pitch_cmd += CMD_ALPHA * (pitch_cmd - filtered_pitch_cmd)
         filtered_roll_cmd += CMD_ALPHA * (roll_cmd - filtered_roll_cmd)
 
