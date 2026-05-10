@@ -39,31 +39,30 @@ import tof # Custom module for time-of-flight sensors
 from mit_motors import RMDL5015, CubeMarsGL60II, STM32_ESC # Custom module
 import joystick as joy
 from helpers import clamp
-import steer_vel_mixer
+# import steer_vel_mixer # Uncomment when re-introducing wheel motors.
 import angle_height_calc
 
+# ******************************************************************************
+# Global flags
+# ******************************************************************************
+
 exit_flag = False # Used for setting flag from within nested while loops.
+tof_trim_enabled = False # ToF trim can be disabled. False means off.
 
-# Used to sequentially read each ToF sensor instead of polling all. 
-# Polling all together was causing performance issues.
-tof_index = 0
-TOF_PERIOD = 0.005  # 200 Hz
-last_tof_poll = 0.0
+# ******************************************************************************
+# Functions (internal)
+# ******************************************************************************
 
-
-# Mix degrees based on three-limbs
+# Attitude Mixer - Pitch and Roll degrees for three-limbs
 def mix_body_degrees(pitch_deg, roll_deg, height_deg=0.0):
     return {
         "front_left":  height_deg + pitch_deg + roll_deg,
         "front_right": height_deg + pitch_deg - roll_deg,
         "rear":        height_deg - pitch_deg,
     }
-# Deadzone for PS5 controller
-def deadzone(value: float, threshold: float = 0.08) -> float:
-    if abs(value) < threshold:
-        return 0.0
-    return value
 
+# Use signed multiplier input for asymmetric control of pitch and roll
+# Limits based on TARGET_x_y_DEG constants (x is PITCH or ROLL, y is MIN or MAX)
 def map_axis_to_asymmetric_angle(value, negative_limit, positive_limit):
     value = clamp(value, -1.0, 1.0)
 
@@ -72,9 +71,8 @@ def map_axis_to_asymmetric_angle(value, negative_limit, positive_limit):
     else:
         return value * abs(negative_limit)
 
-
 # ******************************************************************************
-# Deadband for PD control
+# Deadband for PD control. Using 0.5 as initial threshold.
 # ******************************************************************************
 def angle_deadband(value, threshold=0.5):
     if abs(value) < threshold:
@@ -90,14 +88,22 @@ pygame.joystick.init()
 
 js = pygame.joystick.Joystick(0) # Check ls /dev/input/js* for js0 if error
 js.init()
+last_r1_press = 0 # R1 button debounce for TOF_TRIM_ENABLE flag
+debounce_time = 0.25   # 250 ms
 
 # ******************************************************************************
 # Initialise CAN.
-# This relies on the can0_enable.py and daemon_helpers.py runnning at startup 
-# as a Linux service to initialise GPIO and CAN bus. See \daemons\README.md
 # ******************************************************************************
+'''
+This relies on the can0_enable.py and daemon_helpers.py runnning at startup as a
+Linux service to initialise GPIO and CAN bus. See \daemons\README.md
+'''
 
 can0 = can.Bus(interface='socketcan', channel='can0')
+
+# ******************************************************************************
+# Initialise ToF sensors as objects from TofSensor class in tof.py
+# ******************************************************************************
 
 tof_sensors = [
     tof.TofSensor(tof_idx=1),
@@ -105,60 +111,49 @@ tof_sensors = [
     tof.TofSensor(tof_idx=3),
     tof.TofSensor(tof_idx=4),
 ]
+# The below variables are used to sequentially read each ToF sensor instead of 
+# polling altogether. 
+# Polling all at the same time was causing performance issues.
+tof_index = 0
+TOF_PERIOD = 0.005  # 200 Hz. Can be used to indepentently reduce ToF poll freq
+last_tof_poll = 0.0
 
 # ******************************************************************************
 # Initialise IMU
-# Example from: https://github.com/CoRoLab-Berlin/bmi270_python
+# Followed example from: https://github.com/CoRoLab-Berlin/bmi270_python
 # ******************************************************************************
 
-IMU = BMI270(I2C_PRIM_ADDR) # 0x68 on i2c channel 7.
-IMU.load_config_file() # Required to load from BMI270 module to the IMU itelf
+imu = BMI270(I2C_PRIM_ADDR) # 0x68 on i2c channel 7.
+imu.load_config_file() # Required to load from BMI270 module to the IMU itelf
 
-IMU.set_mode(PERFORMANCE_MODE)
-IMU.set_acc_range(ACC_RANGE_4G) # Sets the accelerometer for +/- 4g range
-IMU.set_gyr_range(GYR_RANGE_1000) # Sets the gyroscope to 1000 DPS
-IMU.set_acc_odr(ACC_ODR_200) # ODR is output data rate
-IMU.set_gyr_odr(GYR_ODR_200)
-IMU.set_acc_bwp(ACC_BWP_OSR4)
-IMU.set_gyr_bwp(GYR_BWP_OSR4)
-IMU.disable_fifo_header()
-IMU.enable_data_streaming()
-IMU.enable_acc_filter_perf()
-IMU.enable_gyr_noise_perf()
-IMU.enable_gyr_filter_perf()
+imu.set_mode(PERFORMANCE_MODE)
+imu.set_acc_range(ACC_RANGE_4G) # Sets the accelerometer for +/- 4g range
+imu.set_gyr_range(GYR_RANGE_1000) # Sets the gyroscope to 1000 DPS
+imu.set_acc_odr(ACC_ODR_200) # ODR is output data rate
+imu.set_gyr_odr(GYR_ODR_200)
+imu.set_acc_bwp(ACC_BWP_OSR4)
+imu.set_gyr_bwp(GYR_BWP_OSR4)
+imu.disable_fifo_header()
+imu.enable_data_streaming()
+imu.enable_acc_filter_perf()
+imu.enable_gyr_noise_perf()
+imu.enable_gyr_filter_perf()
 
 ACC_SCALE_4G = 1.0/8192.0 # Ratio for 16-bit raw (+/-4g mode) to g units.
 GYRO_SCALE_1000DPS = 1000.0 / 32768.0 # 16-bit signed degrees per second.
 
 # IMU angle smoothing
+ANGLE_ALPHA = 0.15
 filtered_pitch_deg = 0.0
 filtered_roll_deg = 0.0
-ANGLE_ALPHA = 0.15
-
-# Individual leg trim from time-of-flight sensors
-FL_TOF_TRIM_DEG = 0.0 
-FR_TOF_TRIM_DEG = 0.0
-REAR_TOF_TRIM_DEG = 0.0
-TOF_TRIM_RATE = 0.8
-TRIM_CLAMP_UPPER = 35
-TRIM_CLAMP_LOWER = 5
-
-TOF_TRIM_ENABLED = False
-
-
-# Individual leg trim from joystick
-FL_MANUAL_TRIM_DEG = 0.0 
-FR_MANUAL_TRIM_DEG = 0.0
-REAR_MANUAL_TRIM_DEG = 0.0
-MANUAL_TRIM_RATE = 1.0 # Default to 0.2 for slow safe response.
 
 # ******************************************************************************
-# Attitude Targets
+# Attitude Targets and Proportional and Differential Controller Values
 # ******************************************************************************
 
-SUS_READY_DEG = -70 # Angle from horizontal for the suspension legs
+SUS_READY_DEG = angle_height_calc.DEFAULT_SUS_ANGLE_DEG - 360 # Suspension angle
 SUS_STANDBY_DEG = -90.0 # Verticle mode to reduce electrical current demand
-FLUIDITY = 0.1
+FLUIDITY = 0.1 # Parameter passed into move() method
 
 # Set Target Limits (joystick or future payload protection ability)
 TARGET_PITCH_MIN_DEG = -60
@@ -167,36 +162,72 @@ TARGET_PITCH_MAX_DEG = 25
 TARGET_ROLL_MIN_DEG = -20.0
 TARGET_ROLL_MAX_DEG = 20.0
 
-# PD Controller output limits
+# Pitch PD Constants
+KP_PITCH = 0.9
+KD_PITCH = 0.15
+
+# Roll PD Constants
+KD_ROLL = 0.15
+KP_ROLL  = 0.9
+
+# PD Controller output clamp limits (conservative limits for stability)
 CTRL_PITCH_MIN_DEG = -25.0
 CTRL_PITCH_MAX_DEG = 25.0
 
 CTRL_ROLL_MIN_DEG = -25.0
 CTRL_ROLL_MAX_DEG = 25.0
 
-# Command smoothing
+# Low-pass Filter Constant
+CMD_ALPHA = 0.12
 filtered_pitch_cmd = 0.0
 filtered_roll_cmd = 0.0
-CMD_ALPHA = 0.12
 
 # ******************************************************************************
-# Proportional and Differential Controller Values
+# Steering and Velocity Constants
 # ******************************************************************************
-KP_PITCH = 0.9
-KP_ROLL  = 0.9
 
-KD_PITCH = 0.15
-KD_ROLL = 0.15
+STEERING_FLUIDITY = 0.2
+RPM_FWD_LIMIT = 200
+RPM_REV_LIMIT = -100
+
+# ******************************************************************************
+# Trim parameters. 
+# ******************************************************************************
+'''
+Trim overlays on top of PD controlled targets just before 'move()' is applied to
+motors.
+'''
+
+# Individual leg trim from time-of-flight sensors
+# Constants
+TOF_TRIM_RATE = 0.8
+TOF_TRIM_CLAMP_UPPER = 35
+TOF_TRIM_CLAMP_LOWER = 0
+# Variables
+fl_tof_trim_deg = 0.0       # Front-right
+fr_tof_trim_deg = 0.0       # Front-left
+rear_tof_trim_deg = 0.0
+
+# Individual leg trim from joystick
+# Constants
+MANUAL_TRIM_RATE = 1.0 # Default to 0.2 for slow safe response.
+# Variables
+fl_manual_trim_deg = 0.0 
+fr_manual_trim_degree = 0.0
+rear_manual_trim_deg = 0.0
+
 
 # ******************************************************************************
 # Initialise Motors
-
-# This creates motors as objects of the MITMotor base class from mit_motors.py
-# module. The primary reason is they share similar characterists such as using 
-# the MIT-style CAN frame packing shape. (Postition, Velocity, Kp, Kd, Torque).
-# The only mode used in this project for the suspension and steering motors is 
-# position. The STM32 wheel-driving motors needed a custom CAN frame.
 # ******************************************************************************
+'''
+This creates motors as objects of the MITMotor base class from mit_motors.py
+module. The primary reason is they share similar characterists such as using 
+the MIT-style CAN frame packing shape. (Postition, Velocity, Kp, Kd, Torque).
+The only mode used in this project for the suspension and steering motors is 
+position. The STM32 wheel-driving motors needed a custom CAN frame.
+'''
+
 
 # Suspension Motors (CubeMars GL60 II)
 left_sus_motor = CubeMarsGL60II(
@@ -241,43 +272,43 @@ steering_motor = RMDL5015(
     upper_deg=80,
     max_delta_deg=5,
     direction=1,
-    default_kp=6,
-    default_kd=0.1,
+    default_kp=8,
+    default_kd=0.2,
 )
 
-# Wheel-driving motors
+# Wheel-driving motors (ST B-G431B-ESC1 controller with iFlight GM3506 motors)
 
 # left_wheel_motor = STM32_ESC(
 #     bus=can0,
 #     motor_id=5,
 #     direction=1,
-#     limit_rpm_lower=-200,
-#     limit_rpm_upper=200 # 200 observed as optimal. max_rpm is separate attribute
+#     limit_rpm_lower=RPM_REV_LIMIT,
+#     limit_rpm_upper=RPM_FWD_LIMIT # 200 observed as optimal.
 # )
 
 # right_wheel_motor = STM32_ESC(
 #     bus=can0,
 #     motor_id=6,
 #     direction=1,
-#     limit_rpm_lower=-200,
-#     limit_rpm_upper=200
+#     limit_rpm_lower=RPM_REV_LIMIT,
+#     limit_rpm_upper=RPM_FWD_LIMIT
 # )
 
 # rear_wheel_motor = STM32_ESC(
 #     bus=can0,
 #     motor_id=7,
 #     direction=1,
-#     limit_rpm_lower=-200,
-#     limit_rpm_upper=200
+#     limit_rpm_lower=RPM_REV_LIMIT,
+#     limit_rpm_upper=RPM_FWD_LIMIT
 # )
 
 
 # ******************************************************************************
 # Start Motors
-
-# Startup has a slightly different routine per manufacturer. 
-# See class methods.
 # ******************************************************************************
+'''
+Startup has a slightly different routine per manufacturer. See class methods.
+'''
 
 left_sus_motor.startup()
 time.sleep(0.05)
@@ -332,7 +363,6 @@ try:
         pygame.event.get()
         time.sleep(0.05)
     
-
     # Stand up the robot
     count = 0
     while count < 200: # Needs 200 or ToF sensors won't cal properly.
@@ -369,21 +399,28 @@ try:
             sensor.accumulate=sensor.accumulate + sensor.results.distance_mm
         time.sleep(0.1)
         count = count + 1
+
     # Average distance measurement and set the offset for each sensor
     for sensor in tof_sensors:
-        sensor.accumulate = sensor.accumulate/10 
+        sensor.accumulate = sensor.accumulate/10 # Average of 10 readings
         sensor.offset = angle_height_calc.tof_offset(sensor.accumulate)
         # Initiate first height before main loop
-        sensor.cal_distance = sensor.accumulate- sensor.offset
+        sensor.cal_distance = sensor.accumulate - sensor.offset
 
+        # Uncomment print statement to debug ToF calibration routine.
         # print(
         #     f"raw avg: {sensor.accumulate:.1f}, "
         #     f"offset: {sensor.offset:.1f}, "
         #     f"cal: {sensor.cal_distance:.1f}"
         # )
-        sensor.accumulate = 0
-
-
+        sensor.accumulate = 0 # Reset value after offsets are applied.
+    
+    # Poll all ToF sensors once with calibration before loop start
+    for sensor in tof_sensors:
+        sensor.poll_once()
+        sensor.cal_distance = (
+                sensor.results.distance_mm
+                - sensor.offset)
 
 
 # ******************************************************************************
@@ -395,7 +432,7 @@ try:
 
         # **********************************************************************
         # Collect time-of-flight sensor data
-        # Note: Polling all every time slows down loop significantly
+        # Note: Polling all sensors every cycle slows down loop significantly
         # **********************************************************************
         now = time.monotonic()
 
@@ -414,21 +451,21 @@ try:
 
         # **********************************************************************
         # Use ToF to control trim sensor
-        # ToF 1 for left
-        # ToF 2 for right
-        # Tof 3 for rear
-        # Tof 4 for centre but unused
+        # ToF 0 for left
+        # ToF 1 for right
+        # Tof 2 for rear
+        # Tof 3 for centre but unused
         # **********************************************************************
-        if TOF_TRIM_ENABLED:  # Check TOF_TRIM_ENABLED flag 
+        if tof_trim_enabled:  # Check TOF_TRIM_ENABLED flag 
             FL_TRIM_TARGET_DEG = (
                 angle_height_calc.tof_to_sus_angle(tof_sensors[0].cal_distance)
                 - SUS_READY_DEG
             )
-            FL_TOF_TRIM_DEG += TOF_TRIM_RATE * (
-                FL_TRIM_TARGET_DEG - FL_TOF_TRIM_DEG
+            fl_tof_trim_deg += TOF_TRIM_RATE * (
+                FL_TRIM_TARGET_DEG - fl_tof_trim_deg
             )
-            FL_TOF_TRIM_DEG = clamp(FL_TOF_TRIM_DEG,
-                                    TRIM_CLAMP_LOWER, TRIM_CLAMP_UPPER)
+            fl_tof_trim_deg = clamp(fl_tof_trim_deg,
+                                    TOF_TRIM_CLAMP_LOWER, TOF_TRIM_CLAMP_UPPER)
 
 
             # FR_TRIM_TARGET_DEG = (
@@ -448,15 +485,15 @@ try:
             # )
 
         else:
-            FL_TOF_TRIM_DEG = 0.0
-            FR_TOF_TRIM_DEG = 0.0
-            REAR_TOF_TRIM_DEG = 0.0
+            fl_tof_trim_deg = 0.0
+            fr_tof_trim_deg = 0.0
+            rear_tof_trim_deg = 0.0
 
         # **********************************************************************
         # Collect IMU data
         # **********************************************************************
-        acc = IMU.get_raw_acc_data() # Collect accelerometer data from sensor
-        gyr = IMU.get_raw_gyr_data() # Collect gyroscope data from sensor
+        acc = imu.get_raw_acc_data() # Collect accelerometer data from sensor
+        gyr = imu.get_raw_gyr_data() # Collect gyroscope data from sensor
 
         # Extract and convert to g units before calculations (accelerometer)
         ax_g = acc[0] * ACC_SCALE_4G 
@@ -476,6 +513,7 @@ try:
         pitch_deg = math.degrees(math.atan2(-ax_g,
                                             math.sqrt(ay_g**2 + az_g**2)))
         
+        # Apply low-pass filter to collected IMU data
         filtered_pitch_deg += ANGLE_ALPHA * (pitch_deg - filtered_pitch_deg)
         filtered_roll_deg += ANGLE_ALPHA * (roll_deg - filtered_roll_deg)
 
@@ -488,23 +526,26 @@ try:
         
         # **********************************************************************
         # Collect Joystick Events
-        # Use pygame_test_inputs.py in /tools/ to discover live button mapping
         # **********************************************************************
+        '''
+        Use pygame_test_inputs.py in /tools/ to discover live button mapping.
+        '''
         
         pygame.event.get() # Collects the current state frame for joystick
 
-        # Extract right joystick data for body attitude control
-        pitch_axis = deadzone(-js.get_axis(joy.AXIS_R_Y)) # Invert joystick 
-        roll_axis = deadzone(-js.get_axis(joy.AXIS_R_X)) # Invert joystick
+        # Extract right joystick data for body attitude control. 
+        # (-js. means invert axis)
+        pitch_axis_target_input = joy.deadzone(-js.get_axis(joy.AXIS_R_Y))
+        roll_axis_target_input = joy.deadzone(-js.get_axis(joy.AXIS_R_X))
 
         # Extract left joystick data for steering control
-        steering_axis = deadzone(js.get_axis(joy.AXIS_L_X))
+        steering_axis = joy.deadzone(js.get_axis(joy.AXIS_L_X))
 
-        # all_height_axis = deadzone(-js.get_axis(joy.AXIS_R_Y))
+        # all_height_axis = joy.deadzone(-js.get_axis(joy.AXIS_R_Y))
 
         # Extract and combine RPM target from right and left triggers
-        pos_speed = deadzone(js.get_axis(joy.AXIS_R2))
-        neg_speed = deadzone(js.get_axis(joy.AXIS_L2))
+        pos_speed = joy.deadzone(js.get_axis(joy.AXIS_R2))
+        neg_speed = joy.deadzone(js.get_axis(joy.AXIS_L2))
         axis = joy.triggers_to_axis(pos_speed , neg_speed) # R2 = fwd, L2 = rev
 
 
@@ -512,34 +553,34 @@ try:
         # Manual requests for trim control of individual legs
         if js.get_hat(joy.HAT_DPAD) == (-1, 0):
             if js.get_button(joy.BTN_OPTIONS):
-                FL_MANUAL_TRIM_DEG -= MANUAL_TRIM_RATE  # extend/lower FL
+                fl_manual_trim_deg -= MANUAL_TRIM_RATE  # extend/lower FL
             else:
-                FL_MANUAL_TRIM_DEG += MANUAL_TRIM_RATE # retract/raise FL
+                fl_manual_trim_deg += MANUAL_TRIM_RATE # retract/raise FL
 
         if js.get_hat(joy.HAT_DPAD) == (1, 0):
             if js.get_button(joy.BTN_OPTIONS):
-                FR_MANUAL_TRIM_DEG -= MANUAL_TRIM_RATE   # extend/lower FR
+                fr_manual_trim_degree -= MANUAL_TRIM_RATE   # extend/lower FR
             else:
-                FR_MANUAL_TRIM_DEG += MANUAL_TRIM_RATE  # retract/raise FR
+                fr_manual_trim_degree += MANUAL_TRIM_RATE  # retract/raise FR
 
         if js.get_hat(joy.HAT_DPAD) == (0, -1):
             if js.get_button(joy.BTN_OPTIONS):
-                REAR_MANUAL_TRIM_DEG -= MANUAL_TRIM_RATE # extend/lower REAR
+                rear_manual_trim_deg -= MANUAL_TRIM_RATE # extend/lower REAR
             else:
-                REAR_MANUAL_TRIM_DEG += MANUAL_TRIM_RATE # retract/raise REAR
+                rear_manual_trim_deg += MANUAL_TRIM_RATE # retract/raise REAR
 
         # Reset trim values
         if js.get_hat(joy.HAT_DPAD) == (0, 1):
             # Press UP + Options to gradually rise
             if js.get_button(joy.BTN_OPTIONS): # Low current vertical stance
-                FL_MANUAL_TRIM_DEG = SUS_STANDBY_DEG - SUS_READY_DEG
-                FR_MANUAL_TRIM_DEG = SUS_STANDBY_DEG - SUS_READY_DEG
-                REAR_MANUAL_TRIM_DEG = SUS_STANDBY_DEG - SUS_READY_DEG
+                fl_manual_trim_deg = SUS_STANDBY_DEG - SUS_READY_DEG
+                fr_manual_trim_degree = SUS_STANDBY_DEG - SUS_READY_DEG
+                rear_manual_trim_deg = SUS_STANDBY_DEG - SUS_READY_DEG
             # Just press UP to immediately return to normal (-70 degrees)
             else:
-                FL_MANUAL_TRIM_DEG = 0.0
-                FR_MANUAL_TRIM_DEG = 0.0
-                REAR_MANUAL_TRIM_DEG = 0.0
+                fl_manual_trim_deg = 0.0
+                fr_manual_trim_degree = 0.0
+                rear_manual_trim_deg = 0.0
 
 
         # Check for lie down requests
@@ -568,10 +609,12 @@ try:
         
         # Toggle for TOF_TRIM_ENABLE requests
         if js.get_button(joy.BTN_R1) == 1:
-            if TOF_TRIM_ENABLED:
-                TOF_TRIM_ENABLED = False
-            else:
-                TOF_TRIM_ENABLED = True
+            current_time = time.monotonic()
+
+            if current_time - last_r1_press > debounce_time:
+
+                tof_trim_enabled = not tof_trim_enabled # Toggle flag
+                last_r1_press = current_time
 
         # Check for EXIT or MODE requests
         if js.get_button(joy.BTN_CREATE) == 1:
@@ -583,19 +626,26 @@ try:
         # **********************************************************************
         # Set Targets
         # **********************************************************************
+        '''
+        Map the normalised joystick axes (right-stick) as a multiplier input.
+        If the joystick input is centred, then the input multiplier is 0 for 
+        each axis.
+        A target of 0 for pitch and 0 for roll means level rover body.
+        Placeholder for future steering and velocity mixer.
+        '''
 
+        # If first parameter is neutral position (0), then target is default 0.
         target_pitch_deg = map_axis_to_asymmetric_angle(
-            pitch_axis,
+            pitch_axis_target_input,
             TARGET_PITCH_MIN_DEG,
             TARGET_PITCH_MAX_DEG,
         )
-
+        # If first parameter is neutral position (0), then target is default 0.
         target_roll_deg = map_axis_to_asymmetric_angle(
-            roll_axis,
+            roll_axis_target_input,
             TARGET_ROLL_MIN_DEG,
             TARGET_ROLL_MAX_DEG,
         )
-
 
         # left_target_speed= steer_vel_mixer.axis_to_rpm(axis, 
         #                                     left_wheel_motor.limit_rpm_upper)
@@ -608,10 +658,9 @@ try:
         # Proportional and Differtial Control
         # **********************************************************************
 
-
         # Error is target minus body angle deadband (ignores 0.5 degree errors)
         pitch_error = angle_deadband(target_pitch_deg - pitch_deg)
-        roll_error  = angle_deadband(target_roll_deg - roll_deg)
+        roll_error  = angle_deadband(target_roll_deg - roll_deg) 
 
         # Proportional controller (kp pitch * error)
         # Derivative controller (kd pitch * current rate)
@@ -630,7 +679,9 @@ try:
         pitch_cmd = filtered_pitch_cmd
         roll_cmd = filtered_roll_cmd
 
-        targets = mix_body_degrees(pitch_cmd, roll_cmd)
+        # Send pitch and roll values to mixer function for 3 limbs.
+        # Relative suspension angles are returned.
+        pd_targets = mix_body_degrees(pitch_cmd, roll_cmd)
 
         # print(
         #     f"Tgt P/R: {target_pitch_deg:6.2f}, {target_roll_deg:6.2f} | "
@@ -638,14 +689,29 @@ try:
         #     f"Err P/R: {pitch_error:6.2f}, {roll_error:6.2f} | "
         #     f"Cmd P/R: {pitch_cmd:6.2f}, {roll_cmd:6.2f}"
         #     )
+        
+        # **********************************************************************
+        # Final targets for sending to motors.
+        # **********************************************************************
+        '''
+        The final target commands are summing junctions of the default 
+        suspension angle (SUS_READY_DEG = -70 degrees), the mixed pitch/roll
+        target outputs from the PD controller, the ToF trim adjustments, and the
+        manual trim from the D-PAD buttons (not the joystick axis).
             
-        # Final targets from control loop.
-        front_left_cmd = (SUS_READY_DEG + targets["front_left"] 
-                          + FL_TOF_TRIM_DEG + FL_MANUAL_TRIM_DEG)
-        front_right_cmd = (SUS_READY_DEG + targets["front_right"]
-                           + FR_TOF_TRIM_DEG + FR_MANUAL_TRIM_DEG)
-        rear_cmd = (SUS_READY_DEG + targets["rear"]
-                    + REAR_TOF_TRIM_DEG + REAR_MANUAL_TRIM_DEG)
+        Future intent: 
+            - Replace the ToF trim adjustments with the state 
+              estimation outputs from an unscented Kalman filter (UKF) as a 
+              covariance between velocity and ToF detection.
+            - Add centre ToF sensor data to counter the output of the UKF to 
+              keep average rover height floating. 
+        '''
+        front_left_cmd = (SUS_READY_DEG + pd_targets["front_left"] 
+                          + fl_tof_trim_deg + fl_manual_trim_deg)
+        front_right_cmd = (SUS_READY_DEG + pd_targets["front_right"]
+                           + fr_tof_trim_deg + fr_manual_trim_degree)
+        rear_cmd = (SUS_READY_DEG + pd_targets["rear"]
+                    + rear_tof_trim_deg + rear_manual_trim_deg)
 
 
         # **********************************************************************
@@ -660,23 +726,36 @@ try:
         # right_wheel_motor.send_rpm(right_target_speed)
         # rear_wheel_motor.send_rpm(rear_target_speed)
 
-        print(
-            f"ToF cal: {tof_sensors[0].cal_distance:.1f}, "
-            f"{tof_sensors[1].cal_distance:.1f}, "
-            f"{tof_sensors[2].cal_distance:.1f} | "
-            f"Trim: {FL_TOF_TRIM_DEG:.1f}, "
-            f"{FR_TOF_TRIM_DEG:.1f}, "
-            f"{REAR_TOF_TRIM_DEG:.1f}"
-        )
+        # Uncomment for debugging
+        # print(
+        #     f"ToF cal: {tof_sensors[0].cal_distance:.1f}, "
+        #     f"{tof_sensors[1].cal_distance:.1f}, "
+        #     f"{tof_sensors[2].cal_distance:.1f} | "
+        #     f"Trim: {fl_tof_trim_deg:.1f}, "
+        #     f"{fr_tof_trim_deg:.1f}, "
+        #     f"{rear_tof_trim_deg:.1f}"
+        # )
 
         time.sleep(dt)
+
+except KeyboardInterrupt:
+    print("Keyboard interrupt received. Shutting down safely...")
+
+
+# ******************************************************************************
+# Safe Shutdown Sequence
+# ******************************************************************************
+    '''
+    The 'finally' clause safely shuts down rover instead on instant motor 
+    collapse.
+    '''
 
 finally:
     # Lie down robot
     dt = 0.01
 
     count = 0
-    while count < 100:
+    while count < 200: # Longer time to allow reliable shutdown.
     
         steering_motor.move(0)
         left_sus_motor.move(0)
@@ -691,12 +770,19 @@ finally:
     
     # Shutdown motors
     steering_motor.shutdown()
+    time.sleep(0.05)
     left_sus_motor.shutdown()
+    time.sleep(0.05)
     right_sus_motor.shutdown()
+    time.sleep(0.05)
     rear_motor.shutdown()
+    time.sleep(0.05)
     # left_wheel_motor.shutdown()
+    # time.sleep(0.05)
     # right_wheel_motor.shutdown()
+    # time.sleep(0.05)
     # rear_wheel_motor.shutdown()
+    # time.sleep(0.05)
 
     # Turn off all XSHUT signals to ToF sensors to allow re-run
     tof.xshut_reset()

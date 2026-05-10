@@ -25,7 +25,7 @@
 from dataclasses import dataclass
 import math
 import time
-import can
+import can # python-can module
 
 def clamp(value: float, low: float, high: float) -> float:
     '''
@@ -67,7 +67,9 @@ class MITLimits:
     t_min: float = -24.0      # Nm
     t_max: float = 24.0       # Nm
 
-
+#*******************************************************************************
+# MITMotor base class
+#*******************************************************************************
 class MITMotor:
     '''
     Base superclass for all motors that match the MIT-style CAN packed frame, 
@@ -683,3 +685,4 @@ class STM32_ESC(MITMotor):
 
         self._send_stm_raw(speed=target_rpm, enable=0x01)
 
+# ******************************* End of file **********************************

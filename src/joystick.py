@@ -12,6 +12,10 @@
 ********************************************************************************
 '''
 
+# ******************************************************************************
+# Map of axes and buttons to friendly names
+# ******************************************************************************
+
 # Analogue axes
 AXIS_L_X = 0 # left/right
 AXIS_L_Y = 1 # up/down
@@ -37,6 +41,19 @@ BTN_PS = 12
 
 # Direction pad
 HAT_DPAD = 0
+
+# ******************************************************************************
+# Deadzone for PS5 controller axes. Ignore tiny inputs.
+# ******************************************************************************
+
+def deadzone(value: float, threshold: float = 0.08) -> float:
+    if abs(value) < threshold:
+        return 0.0
+    return value
+
+# ******************************************************************************
+# Functions to normalise and combine triggers from hand controller
+# ******************************************************************************
 
 # Normalise the right, left trigger values from PS5 controller -1 to +1 as-is 
 def norm_trigger(val):

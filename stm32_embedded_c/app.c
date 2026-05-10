@@ -52,10 +52,11 @@ int direction_change(int16_t bemf_speed);
 
 void app_loop(void)
 {
-	bemf_speed = MC_GetMecSpeedAverageMotor1();
-    cmd = target_speed;
-    motor_status = MC_GetSTMStateMotor1();
+	bemf_speed = MC_GetMecSpeedAverageMotor1(); // back EMF speed from API
+    cmd = target_speed; // 'target_speed' is the primary link between
+    motor_status = MC_GetSTMStateMotor1(); //
 
+	/* Restart delay required if changing direction. */
     if (restart_delay)
     {
         if ((HAL_GetTick() - restart_ts) < 500)

@@ -127,20 +127,24 @@ int main(void)
   MX_NVIC_Init();
   /* USER CODE BEGIN 2 */
 
+/* Example CAN configuration from:
+https://community.st.com/t5/stm32-mcus-products/fdcan-problems-on-stm32g4/td-p/569804
+*/
 
-FDCAN_FilterTypeDef sFilterConfig;
+FDCAN_FilterTypeDef sFilterConfig; // Configure a CAN filter structure
 
-sFilterConfig.IdType = FDCAN_STANDARD_ID;
-sFilterConfig.FilterIndex = 0;
-sFilterConfig.FilterType = FDCAN_FILTER_MASK;
-sFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
-sFilterConfig.FilterID1 = ESC_CMD_ID;
-sFilterConfig.FilterID2 = 0x7FF;
+sFilterConfig.IdType = FDCAN_STANDARD_ID; // Use standard 11-bit CAN IDs
+sFilterConfig.FilterIndex = 0; // Use filter slot/index 0
+sFilterConfig.FilterType = FDCAN_FILTER_MASK; // Use mask-based filtering
+sFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0; // Msgs stored in RX FIFO0
+sFilterConfig.FilterID1 = ESC_CMD_ID; // Accept messages with this CAN ID
+sFilterConfig.FilterID2 = 0x7FF; // Filter mask (0x7FF = all 11 bits)
 
-HAL_FDCAN_ConfigFilter(&hfdcan1, &sFilterConfig);
+HAL_FDCAN_ConfigFilter(&hfdcan1, &sFilterConfig); // Apply config to FDCAN1
 
-HAL_FDCAN_Start(&hfdcan1);
+HAL_FDCAN_Start(&hfdcan1); // Start the FDCAN peripheral
 
+// Enable interrupt notification when a new message arrives in RX FIFO0
 HAL_FDCAN_ActivateNotification(
     &hfdcan1,
     FDCAN_IT_RX_FIFO0_NEW_MESSAGE,
@@ -672,6 +676,7 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 {
+    /* Check that the interrupt was caused by a new message in RX FIFO0 */
     if (RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE)
     {
         FDCAN_RxHeaderTypeDef rxHeader;
@@ -679,34 +684,36 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 
         HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &rxHeader, data);
 
-        // IMPORTANT: ignore anything that is not this board's command ID.
-        // Prevents feedback echo loops between boards.
+        /* IMPORTANT: Ignore messages addressed to other CAN IDs. */
+        /* Caused feedback echo loops between motors during tests. */
         if (rxHeader.Identifier != ESC_CMD_ID)
         {
             return;
         }
 
-        // B0-B1: speed command, 0x7FFF = zero
+        /* B0-B1: Speed command, 0x7FFF = centre-aligned zero, like MIT style */
         uint16_t speed_raw = ((uint16_t)data[0] << 8) | data[1];
         int32_t centred = (int32_t)speed_raw - 0x7FFF;
         int16_t speed_cmd = (int16_t)((centred * CAN_MAX_RPM) / 0x7FFF);
 
-        // B2 bit0: enable
+        /* byte 2 bit0: (0x00, 0x00, 0x01)
+        Enabling acts like an on/off but is really a 1 or 0 speed multiplier. */
         uint8_t flags = data[2];
 
         if ((flags & 0x01) == 0)
         {
-            target_speed = 0;
+            target_speed = 0; // If CAN frame is xxxx00xxxxxxxxxx
         }
         else
         {
+            /* Clamp requested speed to the allowed RPM range */
             if (speed_cmd > CAN_MAX_RPM) speed_cmd = CAN_MAX_RPM;
             if (speed_cmd < -CAN_MAX_RPM) speed_cmd = -CAN_MAX_RPM;
 
-            target_speed = speed_cmd;
+            target_speed = speed_cmd;  // Apply received speed command
         }
-
-        send_feedback_frame();
+        /* Send a status/feedback frame after processing the command */
+        send_feedback_frame(); // Includes, supply voltage, duty, bemf speed
     }
 }
 
@@ -716,36 +723,49 @@ void send_feedback_frame(void)
     FDCAN_TxHeaderTypeDef txHeader;
     uint8_t txData[8] = {0};
 
+    /* Read current measured motor speed */
     int16_t speed = MC_GetMecSpeedAverageMotor1();
 
+    /* Clamp speed before encoding it into CAN format */
     if (speed > CAN_MAX_RPM) speed = CAN_MAX_RPM;
     if (speed < -CAN_MAX_RPM) speed = -CAN_MAX_RPM;
 
+    /* Encode speed for CAN transmission. 0x7FFF represents zero speed */
     uint16_t speed_can = (uint16_t)(
         0x7FFF + ((int32_t)speed * 0x7FFF) / CAN_MAX_RPM
     );
 
+    /* Pack the actual motor bemf speed into Bytes 0 & 1. */
     txData[0] = speed_can >> 8;
     txData[1] = speed_can & 0xFF;
 
+    /* Read DC bus voltage and scale it for sending in message */
     uint16_t bus_v_raw = VBS_GetAvBusVoltage_d(&BusVoltageSensor_M1._Super);
-    uint16_t bus_v = (bus_v_raw * 10U) / 1930U;
+    uint16_t bus_v = (bus_v_raw * 10U) / 1930U; // 1930 based on multimeter 
 
+    /* Pack the scaled voltage (x10) into Bytes 2 & 3. */
     txData[2] = bus_v >> 8;
     txData[3] = bus_v & 0xFF;
 
+    /* Read the current six-step duty-cycle as an equivalent to current. */
     uint16_t duty = SixStepVars[M1].DutyCycleRef;
 
+    /* Pack the duty cycle into Bytes 2 & 3. */
     txData[4] = duty >> 8;
     txData[5] = duty & 0xFF;
 
+    /* Direction indicator. 1 is forward, -1 is reverse. */
     uint8_t direction = 0;
     if (speed > 5) direction = 1;
     else if (speed < -5) direction = 2;
 
+    /* Pack the direction into Byte 6. */
     txData[6] = direction;
+
+    /* Pack the motor status into Byte 7. */
     txData[7] = (uint8_t)MC_GetSTMStateMotor1();
 
+    /* Configure CAN transmit header */
     txHeader.Identifier = ESC_FB_ID;
     txHeader.IdType = FDCAN_STANDARD_ID;
     txHeader.TxFrameType = FDCAN_DATA_FRAME;
@@ -756,6 +776,7 @@ void send_feedback_frame(void)
     txHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
     txHeader.MessageMarker = 0;
 
+    /* Queue the feedback frame for TX. */
     HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &txHeader, txData);
 }
 /* USER CODE END 4 */

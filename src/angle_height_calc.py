@@ -20,56 +20,63 @@
 import numpy as np
 
 #*******************************************************************************
-# Define Physical Geometry
+# Define Physical Geometry Constants
 #*******************************************************************************
 
 # Suspension geometry
-origin = np.array([0, 0]) # Centre of suspension from left plane view
-sus_angle_deg = 290 # Equivalent to -70 degrees
-sus_radius = 87.5 # Centre of suspension motor to centre of wheel
-wheel_radius = 45 # 90mm tyres
+ORIGIN = np.array([0, 0]) # Centre of suspension from left plane view
+# SUS_ANGLE_DEG = 290 # Equivalent to -70 degrees
+DEFAULT_SUS_ANGLE_DEG = 290 # Equivalent to -70 degrees
+SUS_RADIUS = 87.5 # Centre of suspension motor to centre of wheel
+WHEEL_RADIUS = 45 # 90mm tyres
 
 # Time-of-flight sensor geometry
-tof_radius = 40 # Radial offset from centre of suspension
-tof_angle_deg = 245 # Sensor is at 245 degrees (-25 forward from vert)
+TOF_RADIUS = 40 # Radial offset from centre of suspension
+TOF_ANGLE_DEG = 245 # Sensor is at 245 degrees (-25 forward from vert)
 
 # Calculate ToF cartesian coordinates relative to suspension origin
-tof_angle_rad = np.deg2rad(245) 
-tof_xy = np.array([tof_radius * np.cos(tof_angle_rad),
-                tof_radius * np.sin(tof_angle_rad)])
+TOF_ANGLE_RAD = np.deg2rad(TOF_ANGLE_DEG) 
+TOF_XY = np.array([TOF_RADIUS * np.cos(TOF_ANGLE_RAD),
+                TOF_RADIUS * np.sin(TOF_ANGLE_RAD)])
 
 # Calculate time-of-flight direction unit vector
-tof_direction = np.array([
-    np.cos(tof_angle_rad),
-    np.sin(tof_angle_rad)
+TOF_DIRECTION = np.array([
+    np.cos(TOF_ANGLE_RAD),
+    np.sin(TOF_ANGLE_RAD)
 ])
 
 # Ideal standby ground contact coordinates 
-sus_angle_rad = np.deg2rad(sus_angle_deg)
-wheel_centre_xy = np.array([sus_radius * np.cos(sus_angle_rad),
-                            sus_radius * np.sin(sus_angle_rad)])
-ground_contact_y = wheel_centre_xy[1] - wheel_radius # negative y from origin
+SUS_ANGLE_RAD = np.deg2rad(DEFAULT_SUS_ANGLE_DEG)
+WHEEL_CENTRE_XY = np.array([SUS_RADIUS * np.cos(SUS_ANGLE_RAD),
+                            SUS_RADIUS * np.sin(SUS_ANGLE_RAD)])
+GROUND_CONTACT_Y = WHEEL_CENTRE_XY[1] - WHEEL_RADIUS # negative y from origin
 
 # Calculate what the ToF sensor should be reading based on Y elements
-expected_tof_y = (ground_contact_y - tof_xy[1]) / tof_direction[1]
+EXPECTED_TOF_DISTANCE = (GROUND_CONTACT_Y - TOF_XY[1]) / TOF_DIRECTION[1]
 
-print(expected_tof_y)
+print(EXPECTED_TOF_DISTANCE) # Uncomment to show in terminal
+
+#*******************************************************************************
+# Functions to return calibrated offset and desired suspension angle.
+#*******************************************************************************
 
 # Function to return calibrated offset to object after settling period in app
-def tof_offset(measured_tof):
-    offset = measured_tof - expected_tof_y
+def tof_offset(measured_distance):
+    
+    offset = measured_distance - EXPECTED_TOF_DISTANCE
+    
     return offset
 
 print(tof_offset(90))
 
 # Function to take the ToF measurement and calculate required suspension angle.
-def tof_to_sus_angle(distance):
-    measured_ground_y = tof_xy[1] + distance * tof_direction[1]
-    wheel_centre_y = measured_ground_y + wheel_radius
-    angle_rad = np.arcsin(wheel_centre_y / sus_radius)
+def tof_to_sus_angle(cal_measured_distance):
+    
+    measured_ground_y = TOF_XY[1] + (cal_measured_distance * TOF_DIRECTION[1])
+    wheel_centre_y = measured_ground_y + WHEEL_RADIUS
+    angle_rad = np.arcsin(wheel_centre_y / SUS_RADIUS) # Sine inverse
     angle_deg = np.rad2deg(angle_rad) # small angle
 
     return angle_deg
-
 
 # ******************************* End of file **********************************

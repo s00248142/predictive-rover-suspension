@@ -1,531 +1,214 @@
 
 # Predictive Rover Suspension
-Final year project. Using TOF and IMU sensors to assess terrain and body pose respectively, to control BLDC motors using FOC controllers and CAN communication for suspension and body control.
-## Python Versions
-Don't assume the newest version is the most appropriate.
-On Jetson Orin Nano the Python version is 3.10.12 (!!! **Do NOT upgrade** !!!)
+## Final Year Project Code Description
+TOF and IMU sensors are utilised to assess the terrain and the rover's body pose  
+respectively. A central controller communicates over CAN bus to command slave  
+motor controllers executing field-oriented control to operate BLDC motors.  
+These motors are used for suspension and body control. <br><br>
+Any mention of the word ***'custom'*** below, means that it was coded for  this  
+project specifically. Not acquired. Treat as created code.
+
+The ```/src/``` directory holds the core applications of the project.<br>
+
+## /src/main.py
+```/src/main.py``` contains the primary loop that runs the rover.<br>
+**There are several references to wheel motors throughout main.py which have**  
+**been commented out until the wheel motors are up and running again.**  
+The program starts by initialising the Can bus, joystick, ToF sensors and IMU  
+sensor. Then constants and variables are declared for attitude targets,  
+proportional differential control, PD output clamp limits, low-pass filter.  
+Constants are declared for steering and velocity. Trim parameters are declared.  
+The individual slave motor controllers are initialised as objects using  
+subclasses from ```MITMotor``` in ```mit_motors.py```. Then, the motor startup  
+sequence in by sending unique CAN commands to each motor controller.  
 <br>
-[Notes for ROS2 Humble on Ubuntu 22.04](https://ros2-tutorial.readthedocs.io/en/humble/preamble/python/installing_python.html?)
-<br>
-
-## Generic Instructions for Python Project with VS Code and GitHub
-<details>
-<summary>If the destination of the target machine is generic Linux, ensure PIP and Venv are installed there first. <br>Click to expand.</summary>
-
-```bash
-python3 --version
-```
-```bash
-python3 -m pip --version
-```
-```bash
-python3 -m venv --help
-```
-If they need to be installed:
-```bash
-sudo apt update
-```
-```bash
-sudo apt install -y python3-pip python3-venv
-```
-
-### For newer versions of Ubuntu you need to add the ```Deadsnakes``` apt repo for older Python versions.
-
-```bash
-sudo add-apt-repository ppa:deadsnakes/ppa
-```
-```bash
-sudo apt update
-```
-```bash
-sudo apt install -y python3.10 python3.10-venv python3.10-dev python3.10-pip
-```
-
-### For very new versions of Ubuntu you need to use ```pyenv``` to install older versions of Python.
-Install build deps (once)
-```bash
-sudo apt install -y \
-  build-essential \
-  libssl-dev zlib1g-dev libbz2-dev \
-  libreadline-dev libsqlite3-dev \
-  libncursesw5-dev xz-utils tk-dev \
-  libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
-```
-Install ```pyenv```
-```bash
-curl https://pyenv.run | bash
-```
-Add to ```~/.bashrc```:
-```bash
-export PYENV_ROOT="$HOME/.pyenv"
-export PATH="$PYENV_ROOT/bin:$PATH"
-eval "$(pyenv init -)"
-```
-Reload:
-```bash
-exec "$SHELL"
-```
-Install Python 3.10
-```bash
-pyenv install 3.10.14
-```
-Use it only in this project:
-```bash
-cd ~/code/camjam-3-normal
-```
-```bash
-pyenv local 3.10.14
-```
-```bash
-python -m venv .venv
-```
-```bash
-source .venv/bin/activate
-```
-Verify:
-```bash
-python --version
-```
----
-
-
-</details>
-<br>
-Create new repo on GitHub.
-
-In VS Code go to Command Palette `Ctrl + Shift + P` (assumes Remote Repositories extension is installed).  
-
-Search for '*Remote Repositories: Open Remote Repository*'  
-![](docs/images/readme260123001.png)
-
-Then, choose '*Open Repository from GitHub*'  
-![](docs/images/readme260123002.png)
-
-Within the remote repo click on the lower-left GitHub symbol (VS Code UI) ![](docs/images/readme260123003.png).
-
-Then select '*Continue working in New Local Clone*'  
-![](docs/images/readme260123004.png)
-
-Then choose overall local folder. A new repo folder will be created within this with the repo name.  
-![](docs/images/readme260123005.png)
-
-Create folder for storing README images.
-```bash
-mkdir -p docs/images
-```
-
-Create a `src` folder for project code.
-```bash
-mkdir src
-```
-
-Create .gitignore file.  
-```bash
-code .gitignore
-```
-
-.gitignore contents
-```
-.venv/
-__pycache__/
-*.pyc
-.pytest_cache/
-.mypy_cache/
-```
-### Create a virtual environment.
-In *Terminal*, navigate to repo folder, then create the venv with this command:  
-![](docs/images/readme260123006.png)
-```
-python -m venv .venv
-```
-You may need to close and reopen to sync the changes, so that the `.venv/` folder appears.  
-
-Right-click in repo and click '*Open in Integrated Terminal*'.
-Activate the venv:<br>
-![](docs/images/readme260123007.png) 
-Powershell:
-```bash
-.\.venv\Scripts\Activate.ps1
-```
-or BASH:
-```bash
-source .venv/Scripts/activate
-```
-or Linux:
-```bash
-source .venv/bin/activate
-```
-
-If you need to deactivate (optional):
-```bash
-deactivate
-```
-
-### VS Code: pick the interpreter once
-```Ctrl + Shift + P``` → Python: Select Interpreter → choose ```.venv```  
-![](docs/images/readme260123008.png)
-
-<details>
-<summary>
-If you need to change the interpreter for a specific version, click here to expand.
-</summary>
-
-Deactivate current virtual environment:
-```bash
-deactivate
-```
-Remove the venv entirely (disposable):
-```bash
-rm -rf .venv/
-```
-Use a specific installed interpreter version using Python Launcher, `py`.
-```bash
-py -3.10 -m venv .venv
-```
-</details>
-
-### Automatically activate venv and BASH within repo on VS Code:
-1. Create VS Code settings JSON file within repo:  
-```bash
-mkdir .vscode\
-```
-![](docs/images/readme260123009.png)
-
-```bash
-code .vscode\settings.json
-```
-
-2. Contents of .vscode\settings.json  
-```json
-{
-  // Activate .venv/ when terminal is started
-  "python.terminal.activateEnvironment": true,
-
-  // Work with Bash as the default terminal
-  "terminal.integrated.defaultProfile.windows": "Git Bash",
-  "terminal.integrated.defaultProfile.linux": "bash",
-  "terminal.integrated.defaultProfile.osx": "bash"
-}
-```
-
-3. Close all open terminals and close VS Code fully.
-4. Start VS Code and open new one `Ctrl + Shift + '`
-
-### Check if runnig in venv:
-```
-python -m pip -V
-```
-
-### Initial `requirements.txt` file:
-The contents should be initially empty if contained within `.venv/`.
-```bash
-pip freeze > requirements.txt
-```
-Install the captured dependencies on the new machine:
-```bash
-pip install -r requirements.txt
-```
-### Create `.vscode/extensions.json` file for recommending VS Code Extensions for this project.
-```bash
-code .vscode/extensions.json
-```
-You can get IDs of installed extensions using:
-```bash
-code --list-extensions
-```
-The `extensions.json` contents look like:
-```json
-{
-"recommendations": [
-"ms-python.python",
-"ms-python.vscode-pylance",
-"ms-vscode.remote-explorer"
-],
-"unwantedRecommendations": []
-}
-```
-When repo accessed on new machine a prompt should show extension recommendations.
-
-## To Migrate to New Machine with VS Code
-### On old machine:
-1. Capture required dependencies
-```bash
-pip freeze > requirements.txt
-```
-2. Sync project with GitHub
-
-### On new machine:
-3. Open remote repository and continue to work in local clone
-4. Create and activate virtual environment:
-```bash
-python3 -m venv .venv
-```
-```bash
-source .venv/bin/activate
-```
-5. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-## Connect to Pi over SSH
-[YouTube example here.](https://www.youtube.com/watch?v=MzBFo65xnbA&list=PLBrq1OKRHMwUbbujTlmt1YGRzL9O0LfNJ&index=5)
-
-Use `Remote Explorer` extension ![](docs/images/readme260126001.png) .
-
-Click the cog:<br>![alt text](docs/images/readme260126002.png)
-
-Click your default config file:<br>![](docs/images/readme260126003.png)
-
-Example host entry:
-```
-Host CamJam_RPi_Zero_2W
-    HostName 192.168.1.190
-    User alan
-```
-
-A link should appear on the left:<br><br>
-![](docs/images/readme260126004.png)
-
-Enter your SSH password, then VSS Code remote server will be downloaded to the device. You will know you're connected by looking at the lower-left status:<br><br>
-![](docs/images/readme260126005.png)
-
-You can then perform normal SSH activities, as seen here:<br><br>
-![](docs/images/readme260126006.png)
-
-Create or clone a repo (SSH session on remote machine):
-```bash
-git clone https://github.com/CamJam-EduKit/EduKit3.git
-```
-
-Navigate to the repo folder and open in VS Code in using mouse or in Terminal:
-```bash
-cd EduKit3/
-```
-```bash
-code -r .
-```
-(Doesn't seem to work in normal Terminal. Needs to be VS Code Terminal)
-
-You should now be in a remote VS Code session with the repo displayed like it's a local.<br>
-![](docs/images/readme260127001.png)
-
-### To edit root files within VS Code Remote Explorer
-
-Create an file to point to VS Code Server:
-```bash
-sudo tee /usr/local/bin/code-wait >/dev/null <<'EOF'
-#!/bin/sh
-CODE="$(ls -1t "$HOME"/.vscode-server/cli/servers/*/server/bin/remote-cli/code 2>/dev/null | head -n1)"
-[ -x "$CODE" ] || { echo "VS Code Remote CLI not found under ~/.vscode-server." >&2; exit 1; }
-exec "$CODE" --wait "$@"
-EOF
-```
-Make it executable:
-```bash
-sudo chmod +x /usr/local/bin/code-wait
-```
-Append `.bashrc` to have `sudoedit` command with this line:
-```bash
-echo 'export SUDO_EDITOR="/usr/local/bin/code-wait"' >> ~/.bashrc
-```
-Examples:
-Open root files to edit within VS Code Remote:  
-(instead of sudo nano)
-```bash
-sudoedit /boot/firmware/config.txt
-```
-Edit normal user files:
-```bash
-code -r ~/.bashrc
-```
-<br>
-<br>
-
-## Best GPIO Setup for Linux for Broader Futureproof Development:
-Use `libgpiod` as a C library to interface with `/dev/gpiochip*`:  
-(Usually already installed in distro)<br>
-![](docs/images/readme260129001.png)
-
-To use libgpiod in Python install from apt:
-```bash
-sudo apt install python3-libgpiod
-```
-...and install in PIP:
-```bash
-pip3 install gpiod
-```
-<br>
- 
-
-The `gpiozero` Python wrapper can use `libgpiod` underneath (On Raspberry Pi OS by default).
-![](docs/images/readme260129002.png)
-
-### GPIOZERO on Ubuntu
-
-If running Ubuntu, then the appropriate libraries will need to be added:<br>
-(note: RPi-GPIO is legacy. Not needed)
-```bash
-sudo apt install python3-gpiozero
-sudo apt install python3-RPi.GPIO
-```
-[(Library installation notes)](https://gpiozero.readthedocs.io/en/stable/installing.html)<br>
-or, alteratively (more legacy):
-```bash
-sudo apt install python3-lgpio
-```
-[Guide to run Raspberry Pi GPIO library in Ubuntu](https://ubuntu.com/tutorials/gpio-on-raspberry-pi)
-
-### If there is a 'GPIO Busy' error, then often the SPI GPIO is enabled in Ubuntu.
-Fix by editing the config file:
-```bash
-sudoedit /boot/firmware/config.txt
-```
-Then, change the `dtparam=spi` value:
-```diff
--dtparam=spi=on
-+dtparam=spi=off
-```
-
-### Pin Factories
-GPIOZERO is a python wrapper that uses various underpinnings (pin factories).<br>
-When first run, we can probe to see what it uses:
-```python
-from gpiozero import LED, Device
-led = LED(17)          # or any GPIO number
-print(Device.pin_factory) # Show what GPIOZERO selects lgpio, gpiod(native), etc
-led.close()
-```
-Output (shows `lgpio` was used):
-```bash
-alan@edukit3:~/source/repos/camjam-3-normal/tests$ python3 gpiozero_pin_factory_probe.py 
-<gpiozero.pins.lgpio.LGPIOFactory object at 0xffffbe0dccd0>
-```
-The most platform agnostic modern pin factory is `libgpiod`, but it only supports GPIO and not the alternative funcions of the pins such as PWM. This would need an extra layer.<br>
-See [README_PWM_GPIOD.md](README_PWM_GPIOD.md)<br>
-`CamJamKitRobot` uses `Robot`, `Motor`, and `PWMOutputDevice` classes. This implementation of PWM is software-defined, so it uses just the GPIO on/off portion of the pins (repeatedly in software), not the actual PWM controllers. Harware PWM is not available on the pins that the CamJam HAT is wired to, so `lgpio` is used.
-
-<details>
-<summary>Inspect the code from CamJam (source of the class) - Click to expand:</summary>
-
-(`python3 -c` in bash passes a string in as a python program)
-```bash
-python3 -c "import inspect; from gpiozero.boards import CamJamKitRobot; print(inspect.getsource(CamJamKitRobot))"
-```
-Inspect signature and docstring:<br>
-(which arguments are accepted)
-```bash
-python3 -c "import inspect; from gpiozero.boards import CamJamKitRobot; print(inspect.signature(CamJamKitRobot.__init__)); print(CamJamKitRobot.__doc__)"
-```
-To show that the `robot`class is based on a 'generic dual-motor' with (forward, back) tuples for each of the left and right motors:
-```bash
-python3 -c "import inspect; from gpiozero import Robot; print(inspect.getsource(Robot))"
-```
-☝️ The curve components are interesting.<br>
-From inspection we see that the gpiozero `Robot` class uses the `motor`class
-```bash
-python3 -c "import inspect; from gpiozero import Motor; print(inspect.getsource(Motor))"
-```
-To inspect the `PWMOutputDevice` class (software PWM):
-```bash
-python3 -c "import inspect; from gpiozero.output_devices import PWMOutputDevice; print(inspect.getsource(PWMOutputDevice))"
-```
-</details>
-
----
-### Enable I2C
-Open the `config.txt` file for Ubuntu's settings:
-```bash
-sudoedit /boot/firmware/config.txt
-```
-Look for `dtparam=i2c_arm=on`. You may need to adjust and reboot.
-Then, scan the bus using `i2c-tools`.
-```bash
-sudo apt update
-sudo apt install i2c-tools
-```
-Check the I2C buses available:
-```bash
-ls /dev/i2c*
-```
-Response like: `/dev/i2c-1`
-Then scan I2C bus 1:
-```bash
-$ i2cdetect -y 1
-```
-Below is the response, showing 0x29 on the bus:
-```bash
-     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f  
-00:                         -- -- -- -- -- -- -- --  
-10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --  
-20: -- -- -- -- -- -- -- -- -- 29 -- -- -- -- -- --  
-30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --  
-40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --  
-50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --  
-60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --  
-70: -- -- -- -- -- -- -- --    
-```
----
-### CircuitPython within normal Python:
-[Adafruit.com](https://learn.adafruit.com/circuitpython-on-raspberrypi-linux/running-circuitpython-code-without-circuitpython)<br>
-[PyPi.org](https://pypi.org/project/Adafruit-Blinka/)<br>
-Install Adafruit-Blinka within virtual environment:
-```bash
-pip3 install Adafruit-Blinka
-```
-Then, additional supports can be installed:<br>
-[Documentation](https://learn.adafruit.com/adafruit-vl53l4cd-time-of-flight-distance-sensor/python-circuitpython)
-```bash
-pip3 install adafruit-circuitpython-vl53l4cd
-```
-Examples: [GitHub](https://github.com/adafruit/Adafruit_CircuitPython_VL53L4CD/tree/main/examples)
-
----
-### Enable SPI (Can't be used alongside CamJam motor connection - Same physical pins)
-Re-enable SPI after the earlier CamJam disable.
-```bash
-sudoedit /boot/firmware/config.txt
-```
-```diff
--dtparam=spi=off
-+dtparam=spi=on
-```
-Then reboot and confirm SPI devices are available:
-```bash
-ls /dev/spi*
-
-Response:
-/dev/spidev0.0  /dev/spidev0.1
-```
-(☝️Note: The .0 and .1 refer to CE0 and CE1 chip enable pins)
-<details>
-<summary>
-Alternatively use Adafruit CircuitPython on Raspberry PI:
-</summary>
-
-```bash
-pip3 install adafruit-extended-bus
-```
-</details><br>
-
-The SPIdev library should be already on the system's Python:
-```bash
-sudo apt list --installed | grep python3-spi
-
-Response:
-python3-spidev/jammy,now 3.5-3build1 arm64 [installed,automatic]
-```
-(The `spidev` library fits between Python or C and the Linux SPI driver).
-
-
-
-
-
-
-
-<br>
-<br>
-
-
-
-
-
+Next, the a *'waiting lobby'* is created to wait for user input - the triangle  
+button on the hand controller. When the button is pressed, the suspension motors  
+are sent default angle values to stand up the rover. When the rover is upright,  
+the ToF sensors are calibrated to the expected values from known geometry using  
+the ```tof_offset()``` function from the ```angle_height_calc``` custom module.  
+A frequency of 100Hz is set for the main loop ( ```dt = 0.01``` ) .
+
+The **main application while loop** polls the tof sensors. Only one sensor is  
+polled for every 4th alternate loop, due to performance issues observed if all  
+get polled at the same time.  
+The IMU data is collected and pitch/roll values are calculated using formulae  
+described in presentation (aeropspace XYZ sequence). They are then filtered  
+using a first order low-pass filter.
+
+Joystick events are polled.  
+The right-stick analogue XY axes are used to alter the pitch and roll targets of  
+the pitch and roll PD loops.
+The left-stick analogue X axis is used for steering.  
+The L2 and R2 analogue triggers are combined into a single normalised, signed  
+axis for controlling wheel velocity (RPM), but inactive due to motor issues.  
+The D-PAD left/right/down buttons adjust the manual trim values of the  
+individual suspension angles. The D-PAD buttons can be held down for continuous  
+adjustment.  
+The D-PAD up button is to reset the trim values to 0.  
+The D-PAD up button while the options button is held sets the rover to standby  
+mode, where the suspesion angle is set to -90 degrees, drawing negligible  
+current.
+The cross button (X) lies the rover fully down.  
+The triangle button stands the rover fully up.  
+Automatic trim from the ToF sensors (per limb) is enabled/disabled by pressing  
+the R1 button (debounce applied).  
+The 'create' button exits the program and safely shuts down the rover.
+
+The pitch and roll target are calculated. If no joystick input or payload  
+protection (future intent), then the targets are just zero.  
+Zero target means a level rover body with respect to gravity.
+
+Mext are separate PD loops for pitch and roll. Clamps are applied to avoid  
+undesireable responses and a low-pass filter is applied for smooth transitions.
+
+The outputs of the pitch and roll PD loops are fed into ```mix_body_degrees()```  
+to determine the required outputs for a three-limbed system.
+
+Then, three summing junctions (one for each limb) take the ```SUS_READY_DEG```  
+(-70 degrees), the relative adjustment outputs of ```mix_body_degrees()```, the  
+automatica ToF trim, and the manual trim.
+
+The final step of the main loop is to send the output of the summing junctions  
+to the motors using the ```move()``` method.
+
+When anything causes an exception of exit request, the ```finally``` clause  
+ensures a safe motor shutdown before the program exits.
+
+## /src/mit_motors.py
+This custom module provides the core functional link to all the motor  
+controllers. Objects are created using one of the individual sub-classes  
+specific to each motor type to account for their differences, but they all  
+inherit the attributes and methods of the MITMotor base class because they share  
+the same MIT-style packed CAN frame. The ```command_position_deg()``` method is  
+the final link between this application and the actuation of each motor. Each  
+command is limited to a 5 degree change to avoid rogue requests. The entire  
+application is intended to send a steady stream at 100 Hz, not individual large  
+commands. ```command_position_deg()``` is never called externally. Instead, the  
+```move()``` method is called, which incorporates a target follower for fluid  
+transitions and a clamp to limit out-of-range requests. 
+
+## /src/angle_height_calc.py
+This hosts the geometry constants of the:
+- Origin
+- Suspension radius
+- Wheel radius
+- Default suspension angle
+- ToF sensor radius from origin
+- ToF angle
+
+It calculates the constants of:
+- ToF sensor cartesian coordinates
+- ToF unit vector (direction)
+- Ideal distance from ToF to ground plane intersection
+
+The module has two functions:
+- Pass in ```measured_distance```, returns ```offset``` for calibration
+- Pass in ```cal_measured_distance```, returns ```angle_deg``` for suspension
+
+## /src/tof.py
+```/src/tof.py``` binds the required Python functions to the <br>
+```/tof_driver/libvl53l4cd.so``` shared library using the ```ctypes```<br> 
+standard module. <br>
+It hosts the ```TofSensor``` class for creating each sensor as an object, <br>
+each with their own methods for polling, changing I2C address, etc...
+
+## /src/joystick.py
+This is custom module that maps the buttons and axes of the PS5 game controller  
+to friendly names for easier programming. This includes a ```deadzone()```  
+function to reject tiny input values. It also hosts functions for normalising  
+the analogue triggers, and combining those triggers into a single foward/reverse  
+axis.
+
+## /src/helpers.py
+Two simple functions:
+- ```run_cmd()``` to simplify Linux shell commands as list of strings.
+- ```clamp()``` is a generic clamp function to limit within upper & lower limits  
+
+## /src/steer_vel_mixer.py
+Prototype module intended to implemenent the steering formulae from section  
+2.7.5 of the literature review, but adapted for a three-wheel-drive system, and  
+account for leaning geometry and the articulated steering motor angle, similar  
+to the ```curve_left```/```curve_right``` attributes from earlier differential  
+steering tests: ```tests/010-test-ps3-curve.py```.  
+Inspiration from ```CamJamKitRobot``` Python module.  
+This relied on working wheels, so unfinished due to FOC, 6-step, and elec fault.
+
+## /tof_driver/platform.c
+```/tof_driver/platform.c``` was created to use the ST VL53L4CD driver.<br>
+It links Linux I2C functionality to the specific API handles for reading and<br>
+writing to the sensor's registers. This was a challenge.<br>
+*The remaining files in* ```/tof_driver/``` *are the actual driver downloaded*  
+*from ST. A pdf guide to the driver is in that folder.*
+
+## /daemons/can0_enable.py
+Used as a Linux startup service to ensure GPIO(line 43) and can0 are enable  
+when the system starts. Simplifies the main application.  
+A README file within the directory describes how to implement this.
+
+## /daemons/xshut_startup.py
+Used as a Linux startup service to ensure SPI commands are sent to the shift  
+register when the system boots to ensure all outputs are low. This reduces risk  
+of misfiring the address changes on the ToF sensors.  
+A README file within the directory describes how to implement this.
+
+## /stm32_embedded_c/app.c
+Embedded C program on the ST B-G431B-ESC1 slave motor controller.  
+The ```app_loop()``` function is called from the main ```while()``` loop in  
+```main.c```. The purpose of the ```app_loop()``` in this file is to act as an  
+intermediary API between ```main.c``` and the MCSDK API from ST.  
+The ```target_speed``` as ```cmd``` is the primary parameter passed in to this  
+motor controller board as the first two bytes of the addressed CAN frame. This  
+program then navigates all the necessary conditions of implementing variable  
+speed and direction. The key components created in this program are the  
+```soft_stop_init()``` function which feeds the *'Soft-Stop Catcher'* if/else  
+statements. Much of the rest of the code involves setting and releasing flags,  
+checking status and issuing speed/ramp commands to the MCSDK API.  
+The MCSDK API itself only handles PWM timers and reports runtime and fault  
+states.  
+This is an overly complicated way to implement six-step three-phase motor  
+control for an application that it's not suited for (precise, smooth low-speed  
+positioning). Future intent: Discard code entirely and combine Simple FOC  
+(opensource library) with ST MC Workbench (for CAN, timer, ADC, and GPIO setup).
+
+## /stm32_embedded_c/main.c
+Automatically generated from ST CubeMX with additional user code.
+#### USER CODE BEGIN PD
+#defines for CAN TX/RX addresses and maximum speed (RPM).  
+These addressed need to be different for each motor.
+
+#### USER CODE BEGIN 2
+Defines the CAN filter and initialises configuation for STM32G4 series chips.  
+Followed example from ST community forums. Link in code.
+
+#### USER CODE BEGIN 4
+Two functions.
+- The first is a CAN RX handler to give ```target_speed``` to app_loop() through  
+includes in ```app.h``` , namely ```extern int16_t target_speed;```. This  
+function also calls the 2nd function, ```send_feedback_frame()```.
+- ```send_feedback_frame()``` sends a CAN message declaring actual BEMF-derived  
+speed from API, the measured supply voltage, 6-step duty cycle as a current  
+proxy, and direction.  
+The behaviour here matches the MIT-style behaviour by sending reply for every  
+command received.
+
+#### USER CODE BEGIN WHILE
+```main.c``` while loop calling ```app_loop()``` from ```app.c``` continuously.
+
+## /tools/
+Probably not worth reviewing.  
+Many taken from web examples, poorly commented. This directory can be deleted  
+with no affect on the main application.  
+This directory contains a collection of adhoc tools useful for development, such  
+as flashing a new zero-point for a motor controller's ROM, or observing joystick  
+inputs, or changing I2C addresses. 
+
+## /tests/
+Poorly commented. Can be deleted without affecting main application.  
+Similar to tools, but less organised. It just shows iterative testing of  
+concepts, components, and libraries, throughout the project development.
+
+## /docs/
+Poorly organised. Can be deleted without affecting main application.  
+A collection of *README_xxx.md* variations as personal notes to refer to for  
+setups and Linux commands.

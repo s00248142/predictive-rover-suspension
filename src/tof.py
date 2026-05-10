@@ -76,6 +76,7 @@ lib.VL53L4CD_SetI2CAddress.argtypes = [c.c_uint16, c.c_uint8]
 lib.VL53L4CD_SetI2CAddress.restype = c.c_uint8
 ############################## End of Bindings ###############################
 
+# Turn off all XSHUT pins using shift register, called at end of main.py
 def xshut_reset():
     spi = spidev.SpiDev()
     spi.open(0, 0)          # /dev/spidev0.0
@@ -86,9 +87,10 @@ def xshut_reset():
     spi.close()
     time.sleep(0.05) # Allow signals to fully drop off
 
-def poll_tof_sensors(sensors):
-    for sensor in sensors:
-        sensor.poll_once()
+# Unused
+# def poll_tof_sensors(sensors):
+#     for sensor in sensors:
+#         sensor.poll_once()
 
 # ToF Sensor class for VL53L4CD
 class TofSensor:
@@ -108,6 +110,7 @@ class TofSensor:
         self.offset = 0 # To be calibrated after rover settles at height
         self.cal_distance = 0
 
+    # Enable sensor based on their connected position on the shift register.
     def xshut_on(self):
         spi = spidev.SpiDev()
         spi.open(0, 0)          # /dev/spidev0.0
@@ -118,16 +121,13 @@ class TofSensor:
         spi.close()
         time.sleep(0.05) # Allow xshut to stabilise
 
-
+    # Can be called after XSHUT is turned on to change default I2C address
     def change_addr(self):
         if self.tof_idx == 0:
             raise ValueError("0 is placeholder. Use sensor IDs starting at 1.")
 
         old_addr = c.c_uint16(self.default_addr)
         sensor_id = c.c_uint16(0)
-
-        # Enable power to sensor using Xiao xshut controller
-
         
         # Check if device is live
         while True:
@@ -146,8 +146,8 @@ class TofSensor:
             time.sleep(0.2)
         
         
-        new_linux_addr = addr_pool[self.tof_idx]
-        new_st_addr = c.c_uint8(new_linux_addr << 1)
+        new_linux_addr = addr_pool[self.tof_idx] # Linux uses I2C 7-bit address
+        new_st_addr = c.c_uint8(new_linux_addr << 1) # ST uses 8-bit
 
         status = lib.VL53L4CD_SetI2CAddress(old_addr, new_st_addr)
         print("VL53L4CD_SetI2CAddress() status:", status)
@@ -160,7 +160,7 @@ class TofSensor:
         print("New I2C address:", hex(new_linux_addr))
         print(f"sensor_id: 0x{sensor_id.value:04x}")
 
-
+    # Called after address is changed during object creation.
     def init(self):
         # Initialise sensor
         status = lib.VL53L4CD_SensorInit(self.addr)
@@ -176,7 +176,7 @@ class TofSensor:
         status = lib.VL53L4CD_StartRanging(self.addr)
         print("StartRanging:", status)
 
-        
+    # Polls measurement for ToF object only once. Method called on-the-fly.        
     def poll_once(self):
 
         self.ready.value = 0
@@ -205,7 +205,7 @@ class TofSensor:
         latest_sigma = self.results.sigma_mm
         latest_status = self.results.range_status
         
-        
+        # Uncomment below to debug.
         # print(f"device=0x{self.addr.value:02x}", # Uncomment to debug
         #     f"distance={latest_distance} mm, "
         #     f"sigma={latest_sigma} mm, "
@@ -216,6 +216,8 @@ class TofSensor:
 
 
 # Spare function if external USB controller is needed instead of shift register
+# A xiao ESP32 was used due to intermittent SPI issues on Jetson due to short.
+# Finicky compared to shift register, due to handling of UART messages.
 
     # spare def xshut_on(self):
     #     print(f"Attempting xshut turn on for sensor {self.tof_idx}")
