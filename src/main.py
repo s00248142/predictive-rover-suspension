@@ -476,9 +476,9 @@ try:
                                     TOF_TRIM_CLAMP_LOWER, TOF_TRIM_CLAMP_UPPER)
             
             # Apply low-pass filter to ToF trim values
-            # filtered_fl_tof_trim_deg += TOF_TRIM_ALPHA * (fl_tof_trim_deg       
-            #                                     - filtered_fl_tof_trim_deg)
-            # fl_tof_trim_deg = filtered_fl_tof_trim_deg
+            filtered_fl_tof_trim_deg += TOF_TRIM_ALPHA * (fl_tof_trim_deg       
+                                                - filtered_fl_tof_trim_deg)
+            fl_tof_trim_deg = filtered_fl_tof_trim_deg
 
             # FR_TRIM_TARGET_DEG = (
             #     angle_height_calc.tof_to_sus_angle(tof_sensors[1].cal_distance)
@@ -544,7 +544,7 @@ try:
         pitch_deg = filtered_pitch_deg
         roll_deg = filtered_roll_deg
         
-        # Organise gyroscope data
+        # Organise gyroscope data for Kd multiplier
         pitch_rate_dps = gy_dps
         roll_rate_dps = -gx_dps # Inverted to match motor model
         

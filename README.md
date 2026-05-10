@@ -10,19 +10,22 @@ project specifically. Not acquired. Treat as created code.
 
 The ```/src/``` directory holds the core applications of the project.<br>
 
+## Simplified High-Level Overview
+![alt text](docs/images/main_py_high_level.drawio.png)
+
 ## /src/main.py
 ```/src/main.py``` contains the primary loop that runs the rover.<br>
 **There are several references to wheel motors throughout main.py which have**  
 **been commented out until the wheel motors are up and running again.**  
-The program starts by initialising the Can bus, joystick, ToF sensors and IMU  
+The program starts by initialising the CAN bus, joystick, ToF sensors and IMU  
 sensor. Then constants and variables are declared for attitude targets,  
 proportional differential control, PD output clamp limits, low-pass filter.  
 Constants are declared for steering and velocity. Trim parameters are declared.  
 The individual slave motor controllers are initialised as objects using  
 subclasses from ```MITMotor``` in ```mit_motors.py```. Then, the motor startup  
-sequence in by sending unique CAN commands to each motor controller.  
+sequence is commenced by sending unique CAN commands to each motor controller.  
 <br>
-Next, the a *'waiting lobby'* is created to wait for user input - the triangle  
+Next, a *'waiting lobby'* is created to wait for user input - the triangle  
 button on the hand controller. When the button is pressed, the suspension motors  
 are sent default angle values to stand up the rover. When the rover is upright,  
 the ToF sensors are calibrated to the expected values from known geometry using  
@@ -87,6 +90,8 @@ application is intended to send a steady stream at 100 Hz, not individual large
 commands. ```command_position_deg()``` is never called externally. Instead, the  
 ```move()``` method is called, which incorporates a target follower for fluid  
 transitions and a clamp to limit out-of-range requests. 
+
+![alt text](docs/images/LPF.drawio.png)
 
 ## /src/angle_height_calc.py
 This hosts the geometry constants of the:
