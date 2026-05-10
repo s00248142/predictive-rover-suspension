@@ -178,7 +178,7 @@ CTRL_ROLL_MIN_DEG = -25.0
 CTRL_ROLL_MAX_DEG = 25.0
 
 # Low-pass Filter Constant
-CMD_ALPHA = 0.12
+CMD_ALPHA = 0.12 
 filtered_pitch_cmd = 0.0
 filtered_roll_cmd = 0.0
 
@@ -207,6 +207,11 @@ TOF_TRIM_CLAMP_LOWER = 0
 fl_tof_trim_deg = 0.0       # Front-right
 fr_tof_trim_deg = 0.0       # Front-left
 rear_tof_trim_deg = 0.0
+# Low-pass filter variables
+TOF_TRIM_ALPHA = 0.12 # Intitial test at 0.12
+filtered_fl_tof_trim_deg = 0.0
+filtered_fr_tof_trim_deg = 0.0
+filtered_rear_tof_trim_deg = 0.0
 
 # Individual leg trim from joystick
 # Constants
@@ -450,12 +455,15 @@ try:
             last_tof_poll = now
 
         # **********************************************************************
-        # Use ToF to control trim sensor
-        # ToF 0 for left
-        # ToF 1 for right
-        # Tof 2 for rear
-        # Tof 3 for centre but unused
+        # Automatically Apply Trim using ToF Measurement
         # **********************************************************************
+        '''
+        Use ToF to control trim sensor
+        ToF 0 for left
+        ToF 1 for right
+        Tof 2 for rear
+        Tof 3 for centre but unused
+        '''
         if tof_trim_enabled:  # Check TOF_TRIM_ENABLED flag 
             FL_TRIM_TARGET_DEG = (
                 angle_height_calc.tof_to_sus_angle(tof_sensors[0].cal_distance)
@@ -466,23 +474,39 @@ try:
             )
             fl_tof_trim_deg = clamp(fl_tof_trim_deg,
                                     TOF_TRIM_CLAMP_LOWER, TOF_TRIM_CLAMP_UPPER)
-
+            
+            # Apply low-pass filter to ToF trim values
+            filtered_fl_tof_trim_deg += TOF_TRIM_ALPHA * (fl_tof_trim_deg       
+                                                - filtered_fl_tof_trim_deg)
+            fl_tof_trim_deg = filtered_fl_tof_trim_deg
 
             # FR_TRIM_TARGET_DEG = (
             #     angle_height_calc.tof_to_sus_angle(tof_sensors[1].cal_distance)
             #     - SUS_READY_DEG
             # )
-            # FR_TOF_TRIM_DEG += TOF_TRIM_RATE * (
-            #     FR_TRIM_TARGET_DEG - FR_TOF_TRIM_DEG
+            # fr_tof_trim_deg += TOF_TRIM_RATE * (
+            #     FR_TRIM_TARGET_DEG - fr_tof_trim_deg
             # )
-
+            # fr_tof_trim_deg = clamp(fr_tof_trim_deg,
+            #                         TOF_TRIM_CLAMP_LOWER, TOF_TRIM_CLAMP_UPPER)
+            # Apply low-pass filter to ToF trim values
+            # filtered_fr_tof_trim_deg += TOF_TRIM_ALPHA * (fr_tof_trim_deg       
+            #                                     - filtered_fr_tof_trim_deg)
+            # fr_tof_trim_deg = filtered_fr_tof_trim_deg
+            
             # REAR_TRIM_TARGET_DEG = (
-            #     angle_height_calc.tof_to_sus_angle(tof_sensors[2].cal_distance)
+            #     angle_height_calc.tof_to_sus_angle(tof_sensors[0].cal_distance)
             #     - SUS_READY_DEG
             # )
-            # REAR_TOF_TRIM_DEG += TOF_TRIM_RATE * (
-            #     REAR_TRIM_TARGET_DEG - REAR_TOF_TRIM_DEG
+            # rear_tof_trim_deg += TOF_TRIM_RATE * (
+            #     REAR_TRIM_TARGET_DEG - rear_tof_trim_deg
             # )
+            # rear_tof_trim_deg = clamp(rear_tof_trim_deg,
+            #                         TOF_TRIM_CLAMP_LOWER, TOF_TRIM_CLAMP_UPPER)
+            # Apply low-pass filter to ToF trim values
+            # filtered_rear_tof_trim_deg += TOF_TRIM_ALPHA * (rear_tof_trim_deg       
+            #                                     - filtered_rear_tof_trim_deg)
+            # rear_tof_trim_deg = filtered_rear_tof_trim_deg
 
         else:
             fl_tof_trim_deg = 0.0
