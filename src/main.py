@@ -465,20 +465,20 @@ try:
         Tof 3 for centre but unused
         '''
         if tof_trim_enabled:  # Check TOF_TRIM_ENABLED flag 
-            FL_TRIM_TARGET_DEG = (
+            fl_trim_target_deg = (
                 angle_height_calc.tof_to_sus_angle(tof_sensors[0].cal_distance)
                 - SUS_READY_DEG
             )
             fl_tof_trim_deg += TOF_TRIM_RATE * (
-                FL_TRIM_TARGET_DEG - fl_tof_trim_deg
+                fl_trim_target_deg - fl_tof_trim_deg
             )
             fl_tof_trim_deg = clamp(fl_tof_trim_deg,
                                     TOF_TRIM_CLAMP_LOWER, TOF_TRIM_CLAMP_UPPER)
             
             # Apply low-pass filter to ToF trim values
-            filtered_fl_tof_trim_deg += TOF_TRIM_ALPHA * (fl_tof_trim_deg       
-                                                - filtered_fl_tof_trim_deg)
-            fl_tof_trim_deg = filtered_fl_tof_trim_deg
+            # filtered_fl_tof_trim_deg += TOF_TRIM_ALPHA * (fl_tof_trim_deg       
+            #                                     - filtered_fl_tof_trim_deg)
+            # fl_tof_trim_deg = filtered_fl_tof_trim_deg
 
             # FR_TRIM_TARGET_DEG = (
             #     angle_height_calc.tof_to_sus_angle(tof_sensors[1].cal_distance)
