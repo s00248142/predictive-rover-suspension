@@ -70,7 +70,7 @@ to determine the required outputs for a three-limbed system.
 
 Then, three summing junctions (one for each limb) take the ```SUS_READY_DEG```  
 (-70 degrees), the relative adjustment outputs of ```mix_body_degrees()```, the  
-automatica ToF trim, and the manual trim.
+automatic ToF trim, and the manual trim.
 
 The final step of the main loop is to send the output of the summing junctions  
 to the motors using the ```move()``` method.
