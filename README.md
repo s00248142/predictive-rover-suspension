@@ -147,7 +147,7 @@ writing to the sensor's registers. This was a challenge.<br>
 *from ST. A pdf guide to the driver is in that folder.*
 
 ## /daemons/can0_enable.py
-Used as a Linux startup service to ensure GPIO(line 43) and can0 are enable  
+Used as a Linux startup service to ensure GPIO(line 43) and can0 are enabled  
 when the system starts. Simplifies the main application.  
 A README file within the directory describes how to implement this.
 
