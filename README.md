@@ -75,7 +75,7 @@ automatic ToF trim, and the manual trim.
 The final step of the main loop is to send the output of the summing junctions  
 to the motors using the ```move()``` method.
 
-When anything causes an exception of exit request, the ```finally``` clause  
+When anything causes an exception or exit request, the ```finally``` clause  
 ensures a safe motor shutdown before the program exits.
 
 ## /src/mit_motors.py
