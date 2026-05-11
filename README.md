@@ -62,7 +62,7 @@ The pitch and roll target are calculated. If no joystick input or payload
 protection (future intent), then the targets are just zero.  
 Zero target means a level rover body with respect to gravity.
 
-Mext are separate PD loops for pitch and roll. Clamps are applied to avoid  
+Next are separate PD loops for pitch and roll. Clamps are applied to avoid  
 undesireable responses and a low-pass filter is applied for smooth transitions.
 
 The outputs of the pitch and roll PD loops are fed into ```mix_body_degrees()```  
