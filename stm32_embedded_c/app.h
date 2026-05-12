@@ -7,10 +7,9 @@
 * Version: 1.0
 *******************************************************************************/
 
-
 #include <stdint.h>   // needed for int16_t
 
-extern int16_t target_speed;
+extern int16_t target_speed; // Primary parameter to be linked.
 
 #ifndef APP_H
 #define APP_H

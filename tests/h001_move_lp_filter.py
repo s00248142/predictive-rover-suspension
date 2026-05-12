@@ -11,9 +11,9 @@ for i in range(100):
 
     # Step input
     if i < 20:
-        target = 0
+        target = -70
     else:
-        target = 50
+        target = -50
 
     # Low-pass filter
     filtered += alpha * (target - filtered)

@@ -1,0 +1,52 @@
+import matplotlib.pyplot as plt
+
+filtered = -70
+alpha = 0.05
+max_step = 0.2
+limited = -70
+
+time_values = []
+target_values = []
+filtered_values = []
+limited_values = []
+
+for i in range(500):
+
+    # Step input
+    if i < 20:
+        target = -70
+    elif i <100:
+        target = -60
+    elif i <200:
+        target = -65
+    elif i <300:
+        target = -55
+    else:
+        target = -70
+
+    # Low-pass filter
+    filtered += alpha * (target - filtered)
+
+    # Slew-rate limiter
+    error = filtered - limited
+
+    if error > max_step:
+        limited += max_step
+
+    elif error < -max_step:
+        limited -= max_step
+
+    else:
+        limited = filtered
+
+    time_values.append(i)
+    target_values.append(target)
+    filtered_values.append(filtered)
+    limited_values.append(limited)
+
+plt.plot(time_values, target_values, label="Target")
+plt.plot(time_values, filtered_values, label="Filtered")
+plt.plot(time_values, limited_values, label="Limited")
+plt.legend()
+plt.grid(True)
+plt.show()

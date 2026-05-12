@@ -3,7 +3,7 @@
 * Description: 6_step 3-phase PWM motor operation using ST MCSDK API
 *   The app_loop() function is called from the main while() loop in main.c
 *   main.c initialise the hardware mostly from ST Cube MX configurator.
-*   key additions to main.c include CAN bus messaging and control of
+*   Key additions to main.c include CAN bus messaging and control of
 *   'target_speed' in this file and app_loop().
 * Programmer: Alan Ryan (s00248142)
 * Date: 06/05/2025

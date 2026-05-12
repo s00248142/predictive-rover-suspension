@@ -238,26 +238,20 @@ class MITMotor:
         kd: float = None,
     ) -> float:
         '''
-        High-rate target-following command.
-
-        Call this once per control-loop tick, e.g. at 100 Hz:
+        Target-following command.
+        This is called at 100 Hz (assuming dt=0.01):
             motor.move(destination_deg, fluidity=0.7, dt=0.01)
-
         fluidity:
-            0.0 = very direct / snappy
-            1.0 = very fluid / muddy
-
-        The method internally filters the destination and also respects
-        max_delta_deg.
-        Returns the actual command angle sent to the motor.
+            0.0 = Fast response
+            1.0 = Slow response
         '''
         target_deg = clamp(target_deg, self.lower_deg, self.upper_deg)
-        fluidity = clamp(fluidity, 0.0, 1.0)
+        fluidity = clamp(fluidity, 0.0, 1.0) # Friendly normalised input
 
-        # One-pole target filter. Higher fluidity means slower response.
+        # 1st order target filter. Higher fluidity means slower response.
         # At 100 Hz, these values are intentionally conservative.
-        min_tau = 0.02   # Fast
-        max_tau = 0.45   # Slow
+        min_tau = 0.02   # Fast response
+        max_tau = 0.45   # Slow response
         tau = min_tau + fluidity * (max_tau - min_tau)
         alpha = dt / (tau + dt)
 
