@@ -31,7 +31,7 @@ xshut = [0, 1, 3, 7, 15] # Nibbles [0000, 0001, 0011, 0111, 1111]
 
 # Replicate VL53L4CD_ResultsData_t struct from VL53L4CD_api.h
 class ResultsData(c.Structure):
-    _fields_ = [
+    _fields_ = [ # List of tuples containing field name and field type.
         ("range_status", c.c_uint8),
         ("distance_mm", c.c_uint16),
         ("ambient_rate_kcps", c.c_uint32),

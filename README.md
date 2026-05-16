@@ -122,8 +122,8 @@ each with their own methods for polling, changing I2C address, etc...
 This is custom module that maps the buttons and axes of the PS5 game controller  
 to friendly names for easier programming. This includes a ```deadzone()```  
 function to reject tiny input values. It also hosts functions for normalising  
-the analogue triggers, and combining those triggers into a single foward/reverse  
-axis.
+the analogue triggers, and combining those triggers into a single  
+forward/reverse axis.
 
 ## /src/helpers.py
 Two simple functions:

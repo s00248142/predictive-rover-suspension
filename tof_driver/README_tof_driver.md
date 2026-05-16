@@ -19,3 +19,5 @@ gcc -shared -fPIC tof_driver/platform.c tof_driver/VL53L4CD_api.c -o tof_driver/
 ```
 '-lm' links the math library.
 
+How to compile shared objects (.so)
+https://www.youtube.com/watch?v=_VtnqLzakDI
