@@ -172,5 +172,6 @@ lines_2, labels_2 = ax2.get_legend_handles_labels()
 
 ax1.legend(lines_1 + lines_2, labels_1 + labels_2)
 
-plt.title("ToF detection, delayed terrain, and resulting suspension angle")
+plt.title("Simulation:\n" \
+"ToF detection, delayed terrain, and resulting suspension angle")
 plt.show()
