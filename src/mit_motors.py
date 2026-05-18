@@ -2,7 +2,7 @@
 ********************************************************************************
 * File Name: mit_motors.py
 * Description: The purpose of this file is to use a shared MITMotor base class
-* for CAN-based motor controller that can accept a similar style of CAN packed 
+* for CAN-based motor controllers that can accept a similar style of CAN packed 
 * frame, e.g. MIT_NEUTRAL = [0x7F, 0xFF, 0x7F, 0xF0, 0x00, 0x00, 0x07, 0xFF]
 * The frame is divided left to right as:
 *   - Position (16-bit where 0x7FFF is centre-aligned zero)
@@ -91,7 +91,7 @@ class MITMotor:
         direction: int = 1, # Change to -1 to flip direction.
         lower_deg: float = -1.0, # Overide with intended degree range
         upper_deg: float = 1.0, # Overide with intended degree range
-        max_delta_deg: float = 5.0, # Rely on loop to move continuously
+        max_delta_deg: float = 5.0, # Slew limit. Use loop to move continuously
         default_kp: float = 2.0, # Default from testing motors
         default_kd: float = 0.02,  
     ):
@@ -215,8 +215,7 @@ class MITMotor:
         self._last_command_deg = target_deg
         self._filtered_target_deg = target_deg
 
-        # direction flips user steering direction without changing wiring or signs elsewhere.
-        # _zero_rad makes command 0 deg mean "wherever the motor was at startup".
+        # _zero_rad makes command 0 deg mean "wherever the motor was at startup"
         p_des_rad = self._zero_rad + math.radians(target_deg * self.direction)
 
         self._send_mit_raw(
@@ -249,7 +248,6 @@ class MITMotor:
         fluidity = clamp(fluidity, 0.0, 1.0) # Friendly normalised input
 
         # 1st order target filter. Higher fluidity means slower response.
-        # At 100 Hz, these values are intentionally conservative.
         min_tau = 0.02   # Fast response
         max_tau = 0.45   # Slow response
         tau = min_tau + fluidity * (max_tau - min_tau)
@@ -380,7 +378,7 @@ class RMDL5015(MITMotor):
         '''
         Safe startup sequence for RMD.
 
-        If use_current_position_as_zero is True, command 0 deg means the physical
+        If use_current_position_as_zero is True, command 0 deg means physical
         position the motor was at during startup.
         '''
         # Start motor by giving shutdown command first
