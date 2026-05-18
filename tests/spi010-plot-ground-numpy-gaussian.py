@@ -44,7 +44,7 @@ vl53.start_ranging()
 spi = spidev.SpiDev()
 spi.open(0, 0)                 # CE0 (/dev/spidev0.0)
 spi.max_speed_hz = 1_000_000
-spi.mode = 0b01                # SPI mode 1 per datasheet :contentReference[oaicite:1]{index=1}
+spi.mode = 0b01                # SPI mode 1 per datasheet
 spi.bits_per_word = 8
 
 read_angle_cmd = make_read_cmd(ANGLE_REG)

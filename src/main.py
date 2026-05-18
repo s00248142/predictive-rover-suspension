@@ -275,10 +275,10 @@ steering_motor = RMDL5015(
     motor_id=4,
     lower_deg=-80, # For steering this is the sweep left and rignt. 0 is centre.
     upper_deg=80,
-    max_delta_deg=5,
+    max_delta_deg=5, # Slew rate limit
     direction=1,
-    default_kp=8,
-    default_kd=0.2,
+    default_kp=8, # Kp 8 found to be acceptable with initial tests.
+    default_kd=0.2, # Kd 0.2 found to be acceptable with initial tests.
 )
 
 # Wheel-driving motors (ST B-G431B-ESC1 controller with iFlight GM3506 motors)

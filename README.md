@@ -131,8 +131,8 @@ Two simple functions:
 - ```clamp()``` is a generic clamp function to limit within upper & lower limits  
 
 ## /src/steer_vel_mixer.py
-Prototype module intended to implemenent the steering formulae from section  
-2.7.5 of the literature review, but adapted for a three-wheel-drive system, and  
+Prototype module intended to implement the steering formulae from section  
+2.6.7 of the literature review, but adapted for a three-wheel-drive system, and  
 account for leaning geometry and the articulated steering motor angle, similar  
 to the ```curve_left```/```curve_right``` attributes from earlier differential  
 steering tests: ```tests/010-test-ps3-curve.py```.  

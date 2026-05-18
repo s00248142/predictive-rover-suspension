@@ -67,7 +67,7 @@ def tof_offset(measured_distance):
     
     return offset
 
-print(tof_offset(90))
+# print(tof_offset(90)) Uncomment and run for debugging.
 
 # Function to take the ToF measurement and calculate required suspension angle.
 def tof_to_sus_angle(cal_measured_distance):
